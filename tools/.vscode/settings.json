@@ -8,7 +8,10 @@
     "files.trimFinalNewlines": true,
     "files.eol": "\n",
     "cSpell.words": [
+        // zig
+        "memcpy",
         // project
         "starchor",
+        "vtable"
     ]
 }
