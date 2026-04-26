@@ -9,20 +9,19 @@ pub const ComponentId = struct {
     pub const INVALID_ID: usize = std.math.maxInt(usize);
 
     val: usize = INVALID_ID,
-    registry: ?*const ComponentRegistry = null,
+    registry: *const ComponentRegistry,
 
     pub fn equal(self: ComponentId, other: ComponentId) bool {
         return self.val == other.val and self.registry == other.registry;
     }
 
     pub fn tryGetMeta(self: ComponentId) ?ComponentMeta {
-        const registry = self.registry orelse return null;
-        return registry.tryGetMeta(self);
+        return self.registry.tryGetMeta(self);
     }
 
     /// Make sure the registry is valid and the meta is registered before calling this function.
-    pub fn meta(self: ComponentId) ComponentMeta {
-        return self.registry.?.getMeta(self);
+    pub fn getMeta(self: ComponentId) ComponentMeta {
+        return self.registry.getMeta(self);
     }
 };
 
@@ -140,8 +139,7 @@ pub const ComponentRegistry = struct {
     }
 
     pub fn tryGetMeta(self: *const Self, id: ComponentId) ?ComponentMeta {
-        const id_registry = id.registry orelse return null;
-        if (id_registry != self or id.val >= self.meta_list.items.len) {
+        if (id.registry != self or id.val >= self.meta_list.items.len) {
             return null;
         }
         return self.meta_list.items[id.val];
@@ -149,7 +147,7 @@ pub const ComponentRegistry = struct {
 
     /// Make sure the id is valid before calling this function.
     pub fn getMeta(self: *const Self, id: ComponentId) ComponentMeta {
-        std.debug.assert(id.registry.? == self);
+        std.debug.assert(id.registry == self);
         std.debug.assert(id.val < self.meta_list.items.len);
         return self.meta_list.items[id.val];
     }
@@ -231,7 +229,7 @@ test "register is idempotent for same type when meta is identical" {
     try expect(id1.equal(id2));
     try expect(id1.registry == &registry);
 
-    const stored = id1.meta();
+    const stored = id1.getMeta();
     try expect(stored.equal(meta));
 
     var src = T{ .value = 2 };
@@ -277,7 +275,7 @@ test "register returns NonIdempotentWrite for same type with different meta" {
     const id = try registry.register(T, meta_a);
     try expectError(ComponentRegistry.Error.NonIdempotentWrite, registry.register(T, meta_b));
 
-    const stored = id.meta();
+    const stored = id.getMeta();
     try expect(stored.equal(meta_a));
 }
 
@@ -304,7 +302,7 @@ test "registerMeta appends metadata without adding typed lookup entry" {
     defer registry.deinit();
 
     const meta_id = try registry.registerMeta(ComponentMeta.init(u32, .{}));
-    _ = meta_id.meta();
+    _ = meta_id.getMeta();
 
     try expectEqual(@as(u32, 0), registry.address_to_id.size);
     try expect(registry.getId(u32) == null);
@@ -332,10 +330,6 @@ test "tryGetMeta returns null for invalid component id" {
 
     const T = struct { value: i32 };
     const id_a = try registry_a.register(T, ComponentMeta.init(T, .{}));
-
-    const no_registry = ComponentId{};
-    try expect(no_registry.tryGetMeta() == null);
-
     try expect(registry_b.tryGetMeta(id_a) == null);
 
     const invalid_index = ComponentId{ .val = id_a.val + 1, .registry = &registry_a };

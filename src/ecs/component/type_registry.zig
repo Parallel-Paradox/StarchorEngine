@@ -14,20 +14,19 @@ pub const TypeId = struct {
     pub const INVALID_ID: usize = std.math.maxInt(usize);
 
     val: usize = INVALID_ID,
-    registry: ?*const TypeRegistry = null,
+    registry: *const TypeRegistry,
 
     pub fn equal(self: TypeId, other: TypeId) bool {
         return self.val == other.val and self.registry == other.registry;
     }
 
     pub fn tryGetMeta(self: TypeId) ?TypeMeta {
-        const registry = self.registry orelse return null;
-        return registry.tryGetMeta(self);
+        return self.registry.tryGetMeta(self);
     }
 
     /// Make sure the registry is valid and the meta is registered before calling this function.
-    pub fn meta(self: TypeId) TypeMeta {
-        return self.registry.?.getMeta(self);
+    pub fn getMeta(self: TypeId) TypeMeta {
+        return self.registry.getMeta(self);
     }
 };
 
@@ -99,8 +98,7 @@ pub const TypeRegistry = struct {
     }
 
     pub fn tryGetMeta(self: *const Self, id: TypeId) ?TypeMeta {
-        const id_registry = id.registry orelse return null;
-        if (id_registry != self or id.val >= self.meta_list.items.len) {
+        if (id.registry != self or id.val >= self.meta_list.items.len) {
             return null;
         }
         return self.meta_list.items[id.val];
@@ -108,7 +106,7 @@ pub const TypeRegistry = struct {
 
     /// Make sure the id is valid before calling this function.
     pub fn getMeta(self: *const Self, id: TypeId) TypeMeta {
-        std.debug.assert(id.registry.? == self);
+        std.debug.assert(id.registry == self);
         std.debug.assert(id.val < self.meta_list.items.len);
         return self.meta_list.items[id.val];
     }
@@ -137,7 +135,7 @@ test "register returns stable id for same type and stores correct meta" {
     try expect(id1.equal(id2));
     try expect(id1.registry == &registry);
 
-    const meta = id1.meta();
+    const meta = id1.getMeta();
     try expectEqual(@sizeOf(u32), meta.size);
     try expectEqual(@alignOf(u32), meta.alignment);
     try expectEqualStrings(@typeName(u32), meta.name);
@@ -175,7 +173,7 @@ test "registerMeta appends metadata without adding typed lookup entry" {
     };
 
     const meta_id = try registry.registerMeta(meta);
-    const stored_meta = meta_id.meta();
+    const stored_meta = meta_id.getMeta();
     try expectEqual(@as(usize, 13), stored_meta.size);
     try expectEqual(@as(usize, 1), stored_meta.alignment);
     try expectEqualStrings("custom.meta", stored_meta.name);
@@ -204,10 +202,6 @@ test "tryGetMeta returns null for invalid type id" {
     defer registry_b.deinit();
 
     const id_a = try registry_a.register(u8);
-
-    const no_registry = TypeId{};
-    try expect(no_registry.tryGetMeta() == null);
-
     try expect(registry_b.tryGetMeta(id_a) == null);
 
     const invalid_index = TypeId{ .val = id_a.val + 1, .registry = &registry_a };
