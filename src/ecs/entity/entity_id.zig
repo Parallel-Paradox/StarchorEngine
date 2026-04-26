@@ -17,43 +17,29 @@ pub const EntitySignature = struct {
     const Self = @This();
 
     mask: std.DynamicBitSet,
-    registry: *const ComponentRegistry,
 
-    pub fn init(allocator: Allocator, registry: *const ComponentRegistry) Self {
+    pub fn init(allocator: Allocator) Self {
         return .{
             // Impossible to fail since we start with empty bitset.
             .mask = std.DynamicBitSet.initEmpty(allocator, 0) catch unreachable,
-            .registry = registry,
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.mask.deinit();
-        self.registry = undefined;
     }
 
     pub fn clone(self: *const Self, allocator: Allocator) Allocator.Error!Self {
         return .{
             .mask = try self.mask.clone(allocator),
-            .registry = self.registry,
         };
     }
 
-    pub const SanityError = error{
-        /// The parameters come from a different registry than the one associated with this signature.
-        MismatchRegistry,
-    };
-
-    pub const EditError = Allocator.Error || SanityError;
-
-    pub fn add(self: *Self, ids: []const ComponentId) EditError!void {
+    pub fn add(self: *Self, ids: []const ComponentId.Val) Allocator.Error!void {
         var check_max_id: ?usize = null;
         for (ids) |id| {
-            if (id.registry != self.registry) {
-                return EditError.MismatchRegistry;
-            }
-            if (check_max_id == null or id.val > check_max_id.?) {
-                check_max_id = id.val;
+            if (check_max_id == null or id > check_max_id.?) {
+                check_max_id = id;
             }
         }
         if (check_max_id) |max_id| {
@@ -62,21 +48,15 @@ pub const EntitySignature = struct {
             }
         }
         for (ids) |id| {
-            self.mask.set(id.val);
+            self.mask.set(id);
         }
     }
 
     /// Always shrink to fit after removing components.
-    pub fn remove(self: *Self, ids: []const ComponentId) EditError!void {
+    pub fn remove(self: *Self, ids: []const ComponentId.Val) Allocator.Error!void {
         for (ids) |id| {
-            if (id.registry != self.registry) {
-                return EditError.MismatchRegistry;
-            }
-        }
-
-        for (ids) |id| {
-            if (id.val < self.mask.capacity()) {
-                self.mask.unset(id.val);
+            if (id < self.mask.capacity()) {
+                self.mask.unset(id);
             }
         }
 
@@ -88,17 +68,11 @@ pub const EntitySignature = struct {
         }
     }
 
-    pub fn has(self: *const Self, id: ComponentId) SanityError!bool {
-        if (id.registry != self.registry) {
-            return SanityError.MismatchRegistry;
-        }
-        return id.val < self.mask.capacity() and self.mask.isSet(id.val);
+    pub fn has(self: *const Self, id: ComponentId.Val) bool {
+        return id < self.mask.capacity() and self.mask.isSet(id);
     }
 
-    pub fn contains(self: *const Self, other: *const Self) SanityError!bool {
-        if (other.registry != self.registry) {
-            return SanityError.MismatchRegistry;
-        }
+    pub fn contains(self: *const Self, other: *const Self) bool {
         var it = other.mask.iterator(.{});
         while (it.next()) |bit_index| {
             if (bit_index >= self.mask.capacity() or !self.mask.isSet(bit_index)) {
@@ -108,10 +82,7 @@ pub const EntitySignature = struct {
         return true;
     }
 
-    pub fn intersects(self: *const Self, other: *const Self) SanityError!bool {
-        if (other.registry != self.registry) {
-            return SanityError.MismatchRegistry;
-        }
+    pub fn intersects(self: *const Self, other: *const Self) bool {
         var it = self.mask.iterator(.{});
         while (it.next()) |bit_index| {
             if (bit_index < other.mask.capacity() and other.mask.isSet(bit_index)) {
@@ -124,133 +95,83 @@ pub const EntitySignature = struct {
 
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
-const expectError = std.testing.expectError;
 
-const ComponentMeta = ecs.component.ComponentMeta;
-
-test "EntitySignature add/has works and deduplicates naturally by bitset" {
-    var registry = ComponentRegistry.init(std.testing.allocator);
-    defer registry.deinit();
-
-    const id0 = try registry.registerMeta(ComponentMeta.init(u8, .{}));
-    const id1 = try registry.registerMeta(ComponentMeta.init(u16, .{}));
-    const id2 = try registry.registerMeta(ComponentMeta.init(u32, .{}));
-
-    var sig = EntitySignature.init(std.testing.allocator, &registry);
-    defer sig.deinit();
-
-    try sig.add(&.{ id2, id0, id2 });
-
-    try expect(try sig.has(id0));
-    try expect(!(try sig.has(id1)));
-    try expect(try sig.has(id2));
-    try expectEqual(@as(usize, id2.val + 1), sig.mask.capacity());
+test "EntityId default is tombstone sentinel" {
+    const id = EntityId{};
+    try expectEqual(EntityId.INVALID_ID, id.val);
+    try expectEqual(EntityId.TOMB_GENERATION, id.generation);
 }
 
-test "EntitySignature remove will unset bits and shrink to fit" {
-    var registry = ComponentRegistry.init(std.testing.allocator);
-    defer registry.deinit();
+test "EntitySignature add and has" {
+    var signature = EntitySignature.init(std.testing.allocator);
+    defer signature.deinit();
 
-    const id0 = try registry.registerMeta(ComponentMeta.init(u8, .{}));
-    const id1 = try registry.registerMeta(ComponentMeta.init(u16, .{}));
-    const id2 = try registry.registerMeta(ComponentMeta.init(u32, .{}));
+    try signature.add(&.{ 1, 4, 7 });
 
-    var sig = EntitySignature.init(std.testing.allocator, &registry);
-    defer sig.deinit();
-
-    try sig.add(&.{ id0, id1, id2 });
-    try sig.remove(&.{id2});
-
-    try expect(try sig.has(id0));
-    try expect(try sig.has(id1));
-    try expect(!(try sig.has(id2)));
-    try expectEqual(@as(usize, id1.val + 1), sig.mask.capacity());
-
-    try sig.remove(&.{ id1, id0 });
-    try expectEqual(@as(usize, 0), sig.mask.capacity());
+    try expect(signature.has(1));
+    try expect(signature.has(4));
+    try expect(signature.has(7));
+    try expect(!signature.has(0));
+    try expect(!signature.has(8));
 }
 
-test "EntitySignature contains and intersects" {
-    var registry = ComponentRegistry.init(std.testing.allocator);
-    defer registry.deinit();
+test "EntitySignature remove unset bits and shrink capacity" {
+    var signature = EntitySignature.init(std.testing.allocator);
+    defer signature.deinit();
 
-    const id0 = try registry.registerMeta(ComponentMeta.init(u8, .{}));
-    const id1 = try registry.registerMeta(ComponentMeta.init(u16, .{}));
-    const id2 = try registry.registerMeta(ComponentMeta.init(u32, .{}));
+    try signature.add(&.{ 1, 4, 7 });
+    try expectEqual(@as(usize, 8), signature.mask.capacity());
 
-    var a = EntitySignature.init(std.testing.allocator, &registry);
+    try signature.remove(&.{7});
+    try expect(!signature.has(7));
+    try expectEqual(@as(usize, 5), signature.mask.capacity());
+
+    try signature.remove(&.{ 1, 4 });
+    try expectEqual(@as(usize, 0), signature.mask.capacity());
+}
+
+test "EntitySignature contains checks subset relation" {
+    var a = EntitySignature.init(std.testing.allocator);
     defer a.deinit();
-    var b = EntitySignature.init(std.testing.allocator, &registry);
+    var b = EntitySignature.init(std.testing.allocator);
     defer b.deinit();
-    var c = EntitySignature.init(std.testing.allocator, &registry);
-    defer c.deinit();
 
-    try a.add(&.{ id0, id2 });
-    try b.add(&.{id2});
-    try c.add(&.{id1});
+    try a.add(&.{ 1, 3, 5 });
+    try b.add(&.{ 1, 5 });
 
-    try expect(try a.contains(&b));
-    try expect(!(try b.contains(&a)));
+    try expect(a.contains(&b));
+    try expect(!b.contains(&a));
 
-    try expect(try a.intersects(&b));
-    try expect(!(try a.intersects(&c)));
-    try expect(!(try b.intersects(&c)));
+    try b.add(&.{9});
+    try expect(!a.contains(&b));
 }
 
-test "EntitySignature clone creates independent mask with same registry" {
-    var registry = ComponentRegistry.init(std.testing.allocator);
-    defer registry.deinit();
+test "EntitySignature intersects detects overlap" {
+    var a = EntitySignature.init(std.testing.allocator);
+    defer a.deinit();
+    var b = EntitySignature.init(std.testing.allocator);
+    defer b.deinit();
 
-    const id0 = try registry.registerMeta(ComponentMeta.init(u8, .{}));
-    const id1 = try registry.registerMeta(ComponentMeta.init(u16, .{}));
+    try a.add(&.{ 2, 4 });
+    try b.add(&.{6});
+    try expect(!a.intersects(&b));
 
-    var original = EntitySignature.init(std.testing.allocator, &registry);
-    defer original.deinit();
-    try original.add(&.{ id0, id1 });
+    try b.add(&.{4});
+    try expect(a.intersects(&b));
+}
 
-    var cloned = try original.clone(std.testing.allocator);
+test "EntitySignature clone is independent copy" {
+    var signature = EntitySignature.init(std.testing.allocator);
+    defer signature.deinit();
+    try signature.add(&.{ 1, 8 });
+
+    var cloned = try signature.clone(std.testing.allocator);
     defer cloned.deinit();
 
-    try expect(cloned.registry == original.registry);
-    try expect(try cloned.has(id0));
-    try expect(try cloned.has(id1));
+    try expect(cloned.has(1));
+    try expect(cloned.has(8));
 
-    try cloned.remove(&.{id1});
-    try expect(try original.has(id1));
-    try expect(!(try cloned.has(id1)));
-}
-
-test "EntitySignature returns MismatchRegistry for cross-registry operations" {
-    var registry_a = ComponentRegistry.init(std.testing.allocator);
-    defer registry_a.deinit();
-    var registry_b = ComponentRegistry.init(std.testing.allocator);
-    defer registry_b.deinit();
-
-    const id_a = try registry_a.registerMeta(ComponentMeta.init(u8, .{}));
-    const id_b = try registry_b.registerMeta(ComponentMeta.init(u8, .{}));
-
-    var sig_a = EntitySignature.init(std.testing.allocator, &registry_a);
-    defer sig_a.deinit();
-    var sig_b = EntitySignature.init(std.testing.allocator, &registry_b);
-    defer sig_b.deinit();
-
-    try expectError(EntitySignature.EditError.MismatchRegistry, sig_a.add(&.{id_b}));
-    try expectError(EntitySignature.EditError.MismatchRegistry, sig_a.remove(&.{id_b}));
-    try expectError(EntitySignature.SanityError.MismatchRegistry, sig_a.has(id_b));
-    try expectError(EntitySignature.SanityError.MismatchRegistry, sig_a.contains(&sig_b));
-    try expectError(EntitySignature.SanityError.MismatchRegistry, sig_a.intersects(&sig_b));
-
-    try sig_a.add(&.{id_a});
-    try expect(try sig_a.has(id_a));
-}
-
-test "EntitySignature add with empty slice is a no-op" {
-    var registry = ComponentRegistry.init(std.testing.allocator);
-    defer registry.deinit();
-
-    var sig = EntitySignature.init(std.testing.allocator, &registry);
-    defer sig.deinit();
-
-    try sig.add(&.{});
-    try expectEqual(@as(usize, 0), sig.mask.capacity());
+    try signature.remove(&.{8});
+    try expect(!signature.has(8));
+    try expect(cloned.has(8));
 }

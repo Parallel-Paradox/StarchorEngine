@@ -1,14 +1,15 @@
 const std = @import("std");
 
-const type_registry = @import("type_registry.zig");
+const ecs = @import("../root.zig");
 
 const Allocator = std.mem.Allocator;
-const typeAddress = type_registry.typeAddress;
+const typeAddress = ecs.component.typeAddress;
 
 pub const ComponentId = struct {
-    pub const INVALID_ID: usize = std.math.maxInt(usize);
+    pub const Val = usize;
+    pub const INVALID_ID: Val = std.math.maxInt(Val);
 
-    val: usize = INVALID_ID,
+    val: Val = INVALID_ID,
     registry: *const ComponentRegistry,
 
     pub fn equal(self: ComponentId, other: ComponentId) bool {
@@ -78,13 +79,13 @@ pub const ComponentRegistry = struct {
     const Self = @This();
 
     allocator: Allocator,
-    address_to_id: std.AutoHashMapUnmanaged(usize, usize),
+    address_to_id: std.AutoHashMapUnmanaged(usize, ComponentId.Val),
     meta_list: std.ArrayList(ComponentMeta),
 
     pub fn init(allocator: Allocator) Self {
         return .{
             .allocator = allocator,
-            .address_to_id = std.AutoHashMapUnmanaged(usize, usize).empty,
+            .address_to_id = std.AutoHashMapUnmanaged(usize, ComponentId.Val).empty,
             .meta_list = std.ArrayList(ComponentMeta).empty,
         };
     }
@@ -286,8 +287,8 @@ test "register assigns consecutive ids for new types" {
     const id_a = try registry.register(u8, ComponentMeta.init(u8, .{}));
     const id_b = try registry.register(i16, ComponentMeta.init(i16, .{}));
 
-    try expectEqual(@as(usize, 0), id_a.val);
-    try expectEqual(@as(usize, 1), id_b.val);
+    try expectEqual(@as(ComponentId.Val, 0), id_a.val);
+    try expectEqual(@as(ComponentId.Val, 1), id_b.val);
 }
 
 test "getId returns null for unregistered type" {
