@@ -1,4 +1,4 @@
-pub const base = @import("base");
+pub const base = @import("base").base;
 
 pub const ecs = struct {
     pub const component = struct {

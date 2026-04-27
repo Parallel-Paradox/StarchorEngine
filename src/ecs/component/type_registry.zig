@@ -27,12 +27,8 @@ pub const TypeId = struct {
         return self.val == other.val and self.registry == other.registry;
     }
 
-    pub fn tryGetMeta(self: TypeId) ?TypeMeta {
-        return self.registry.tryGetMeta(self);
-    }
-
     /// Make sure the registry is valid and the meta is registered before calling this function.
-    pub fn getMeta(self: TypeId) TypeMeta {
+    pub fn meta(self: TypeId) TypeMeta {
         return self.registry.getMeta(self);
     }
 };
@@ -155,7 +151,7 @@ test "register returns stable id for same type and stores correct meta" {
     try expect(id1.equal(id2));
     try expect(id1.registry == &registry);
 
-    const meta = id1.getMeta();
+    const meta = id1.meta();
     try expectEqual(@sizeOf(u32), meta.size);
     try expectEqual(@alignOf(u32), meta.alignment);
     try expectEqualStrings(@typeName(u32), meta.name);
@@ -194,7 +190,7 @@ test "registerMeta appends metadata without adding typed lookup entry" {
     };
 
     const meta_id = try registry.registerMeta(meta);
-    const stored_meta = meta_id.getMeta();
+    const stored_meta = meta_id.meta();
     try expectEqual(@as(usize, 12345), stored_meta.type_addr.val);
     try expectEqual(@as(usize, 13), stored_meta.size);
     try expectEqual(@as(usize, 1), stored_meta.alignment);

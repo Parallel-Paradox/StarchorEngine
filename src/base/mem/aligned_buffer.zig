@@ -12,7 +12,7 @@ pub const AlignedBuffer = struct {
     aligned: []u8,
 
     pub fn init(allocator: Allocator, size: usize, alignment: usize) Allocator.Error!Self {
-        const original = try allocator.alloc(u8, size + alignment - 1);
+        const original = try allocator.alloc(u8, alignedToOriginal(size, alignment));
 
         const addr = @intFromPtr(original.ptr);
         const offset = std.mem.alignForward(usize, addr, alignment) - addr;
@@ -23,6 +23,17 @@ pub const AlignedBuffer = struct {
 
     pub fn deinit(self: *Self, allocator: Allocator) void {
         allocator.free(self.original);
+    }
+
+    pub fn originalToAligned(original_len: usize, alignment: usize) usize {
+        if (original_len <= alignment) {
+            return 0;
+        }
+        return original_len - alignment + 1;
+    }
+
+    pub fn alignedToOriginal(aligned_len: usize, alignment: usize) usize {
+        return aligned_len + alignment - 1;
     }
 };
 

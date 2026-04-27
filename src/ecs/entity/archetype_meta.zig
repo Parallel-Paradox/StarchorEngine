@@ -35,10 +35,6 @@ pub const ArchetypeMeta = struct {
     pub const InitError = Allocator.Error || error{
         /// The archetype has no components since type_id_vals and comp_id_vals are empty.
         EmptyArchetype,
-        /// The archetype has components that are not registered in the type registry.
-        UnregisteredType,
-        /// The archetype has components that are not registered in the component registry.
-        UnregisteredComponent,
         /// The comp_id and type_id of a column come from different types.
         MismatchedTypeAddress,
     };
@@ -59,8 +55,8 @@ pub const ArchetypeMeta = struct {
         for (unsorted_columns) |col| {
             const type_id = TypeId{ .val = col.type_id_val, .registry = type_registry };
             const comp_id = ComponentId{ .val = col.comp_id_val, .registry = comp_registry };
-            const type_meta = type_id.tryGetMeta() orelse return InitError.UnregisteredType;
-            const comp_meta = comp_id.tryGetMeta() orelse return InitError.UnregisteredComponent;
+            const type_meta = type_id.meta();
+            const comp_meta = comp_id.meta();
             if (type_meta.type_addr.val != comp_meta.type_addr.val) {
                 return InitError.MismatchedTypeAddress;
             }
@@ -75,8 +71,8 @@ pub const ArchetypeMeta = struct {
             pub fn lessThan(ctx: Context, lhs: Column, rhs: Column) bool {
                 const lhs_type_id = TypeId{ .val = lhs.type_id_val, .registry = ctx.type_registry };
                 const rhs_type_id = TypeId{ .val = rhs.type_id_val, .registry = ctx.type_registry };
-                const lhs_type_meta = lhs_type_id.getMeta();
-                const rhs_type_meta = rhs_type_id.getMeta();
+                const lhs_type_meta = lhs_type_id.meta();
+                const rhs_type_meta = rhs_type_id.meta();
 
                 if (lhs_type_meta.alignment != rhs_type_meta.alignment) {
                     return lhs_type_meta.alignment > rhs_type_meta.alignment;
@@ -232,48 +228,6 @@ test "ArchetypeMeta init returns EmptyArchetype for empty columns" {
             &ctx.type_registry,
             &ctx.comp_registry,
             &.{},
-        ),
-    );
-}
-
-test "ArchetypeMeta init returns UnregisteredType when type id is not registered" {
-    var ctx = ArchetypeMetaTestContext.init(std.testing.allocator);
-    defer ctx.deinit();
-
-    _ = try ctx.comp_registry.register(u32, ComponentMeta.init(u32, .{}));
-
-    const columns = [_]ArchetypeMeta.Column{
-        .{ .type_id_val = 0, .comp_id_val = 0 },
-    };
-
-    try expectError(
-        ArchetypeMeta.InitError.UnregisteredType,
-        ArchetypeMeta.init(
-            std.testing.allocator,
-            &ctx.type_registry,
-            &ctx.comp_registry,
-            &columns,
-        ),
-    );
-}
-
-test "ArchetypeMeta init returns UnregisteredComponent when component id is not registered" {
-    var ctx = ArchetypeMetaTestContext.init(std.testing.allocator);
-    defer ctx.deinit();
-
-    _ = try ctx.type_registry.register(u32);
-
-    const columns = [_]ArchetypeMeta.Column{
-        .{ .type_id_val = 0, .comp_id_val = 0 },
-    };
-
-    try expectError(
-        ArchetypeMeta.InitError.UnregisteredComponent,
-        ArchetypeMeta.init(
-            std.testing.allocator,
-            &ctx.type_registry,
-            &ctx.comp_registry,
-            &columns,
         ),
     );
 }
