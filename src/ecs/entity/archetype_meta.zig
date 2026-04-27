@@ -153,7 +153,8 @@ const ArchetypeMetaTestContext = struct {
         self.comp_registry.deinit();
     }
 
-    pub fn mockRegistry(self: *Self) (Allocator.Error || ComponentRegistry.Error)!void {
+    const MockError = Allocator.Error || ComponentRegistry.Error;
+    pub fn mockRegistry(self: *Self) MockError!void {
         _ = try self.type_registry.register(u64);
         _ = try self.type_registry.register([2]u32);
         _ = try self.type_registry.register(u32);
@@ -165,7 +166,7 @@ const ArchetypeMetaTestContext = struct {
         _ = try self.comp_registry.register(i32, ComponentMeta.init(i32, .{}));
     }
 
-    pub fn generateMockMeta(self: *Self) (Allocator.Error || ComponentRegistry.Error || ArchetypeMeta.InitError)!ArchetypeMeta {
+    pub fn generateMockMeta(self: *Self) (MockError || ArchetypeMeta.InitError)!ArchetypeMeta {
         try self.mockRegistry();
 
         const columns = [_]ArchetypeMeta.Column{

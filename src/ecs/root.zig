@@ -20,7 +20,7 @@ pub const entity = struct {
     pub const ArchetypeSignature = archetype_meta.ArchetypeSignature;
     pub const ArchetypeMeta = archetype_meta.ArchetypeMeta;
 
-    const data_chunk = @import("entity/data_chunk.zig");
+    const archetype_chunk = @import("entity/archetype_chunk.zig");
 };
 
 test {
@@ -28,5 +28,5 @@ test {
     _ = component.component_registry;
     _ = entity.entity_id;
     _ = entity.archetype_meta;
-    _ = entity.data_chunk;
+    _ = entity.archetype_chunk;
 }
