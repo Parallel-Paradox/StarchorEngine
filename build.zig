@@ -6,13 +6,23 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const ecs_mod = b.addModule("starchor_ecs", .{
-        .root_source_file = b.path("src/ecs/root.zig"),
+    const base_mod = b.addModule("starchor_base", .{
+        .root_source_file = b.path("src/base/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
+    const ecs_mod = b.addModule("starchor_ecs", .{
+        .root_source_file = b.path("src/ecs/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "base", .module = base_mod },
+        },
+    });
+
     const mods = [_]std.Build.Module.Import{
+        .{ .name = "base", .module = base_mod },
         .{ .name = "ecs", .module = ecs_mod },
     };
 

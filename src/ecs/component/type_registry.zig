@@ -93,6 +93,9 @@ pub const TypeRegistry = struct {
     }
 
     pub fn registerMeta(self: *Self, meta: TypeMeta) Allocator.Error!TypeId {
+        std.debug.assert(meta.type_addr != TypeAddress.INVALID_ADDRESS);
+        std.debug.assert(std.math.isPowerOfTwo(meta.alignment));
+
         const rv = TypeId{ .val = self.meta_list.items.len, .registry = self };
 
         try self.meta_list.append(self.allocator, meta);

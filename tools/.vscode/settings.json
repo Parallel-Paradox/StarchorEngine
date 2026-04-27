@@ -10,6 +10,7 @@
     "cSpell.words": [
         // zig
         "memcpy",
+        "memset",
         // project
         "starchor",
         "vtable"

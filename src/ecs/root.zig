@@ -1,3 +1,5 @@
+const base = @import("base");
+
 pub const component = struct {
     const type_registry = @import("component/type_registry.zig");
     pub const TypeAddress = type_registry.TypeAddress;

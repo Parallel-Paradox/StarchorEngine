@@ -124,6 +124,8 @@ pub const ComponentRegistry = struct {
     }
 
     pub fn registerMeta(self: *Self, meta: ComponentMeta) Allocator.Error!ComponentId {
+        std.debug.assert(meta.type_addr != TypeAddress.INVALID_ADDRESS);
+
         const rv = ComponentId{ .val = self.meta_list.items.len, .registry = self };
 
         try self.meta_list.append(self.allocator, meta);
