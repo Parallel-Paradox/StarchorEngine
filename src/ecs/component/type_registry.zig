@@ -2,13 +2,17 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 
-pub fn typeAddress(comptime T: type) usize {
-    const S = struct {
-        const Type = T; // Instantiate per type to get unique address
-        var dummy: u8 = 0;
-    };
-    return @intFromPtr(&S.dummy);
-}
+pub const TypeAddress = struct {
+    val: usize,
+
+    pub fn of(comptime T: type) TypeAddress {
+        const S = struct {
+            const Type = T; // Instantiate per type to get unique address
+            var dummy: u8 = 0;
+        };
+        return TypeAddress{ .val = @intFromPtr(&S.dummy) };
+    }
+};
 
 pub const TypeId = struct {
     pub const Val = usize;
@@ -62,16 +66,16 @@ pub const TypeRegistry = struct {
     }
 
     pub fn register(self: *Self, comptime T: type) Allocator.Error!TypeId {
-        const address = typeAddress(T);
-        const get_id_val = self.address_to_id.get(address);
+        const addr = TypeAddress.of(T);
+        const get_id_val = self.address_to_id.get(addr.val);
         if (get_id_val) |id_val| {
             return .{ .val = id_val, .registry = self };
         }
 
         const rv = TypeId{ .val = self.meta_list.items.len, .registry = self };
 
-        try self.address_to_id.put(self.allocator, address, rv.val);
-        errdefer _ = self.address_to_id.remove(address);
+        try self.address_to_id.put(self.allocator, addr.val, rv.val);
+        errdefer _ = self.address_to_id.remove(addr.val);
 
         const meta = TypeMeta.init(T);
         try self.meta_list.append(self.allocator, meta);
@@ -90,8 +94,8 @@ pub const TypeRegistry = struct {
     }
 
     pub fn getId(self: *const Self, comptime T: type) ?TypeId {
-        const address = typeAddress(T);
-        if (self.address_to_id.get(address)) |id_val| {
+        const addr = TypeAddress.of(T);
+        if (self.address_to_id.get(addr.val)) |id_val| {
             return TypeId{ .val = id_val, .registry = self };
         } else {
             return null;
@@ -117,13 +121,13 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualStrings = std.testing.expectEqualStrings;
 
-test "typeAddress is stable per type and distinct across different types" {
-    const a1 = typeAddress(u32);
-    const a2 = typeAddress(u32);
-    const b = typeAddress(i32);
+test "TypeAddress is stable per type and distinct across different types" {
+    const a1 = TypeAddress.of(u32);
+    const a2 = TypeAddress.of(u32);
+    const b = TypeAddress.of(i32);
 
-    try expectEqual(a1, a2);
-    try expect(a1 != b);
+    try expectEqual(a1.val, a2.val);
+    try expect(a1.val != b.val);
 }
 
 test "register returns stable id for same type and stores correct meta" {

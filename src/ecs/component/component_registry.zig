@@ -3,7 +3,7 @@ const std = @import("std");
 const ecs = @import("../root.zig");
 
 const Allocator = std.mem.Allocator;
-const typeAddress = ecs.component.typeAddress;
+const TypeAddress = ecs.component.TypeAddress;
 
 pub const ComponentId = struct {
     pub const Val = usize;
@@ -101,8 +101,8 @@ pub const ComponentRegistry = struct {
     };
 
     pub fn register(self: *Self, comptime T: type, meta: ComponentMeta) Error!ComponentId {
-        const address = typeAddress(T);
-        const get_id_val = self.address_to_id.get(address);
+        const addr = TypeAddress.of(T);
+        const get_id_val = self.address_to_id.get(addr.val);
         if (get_id_val) |id_val| {
             if (!self.meta_list.items[id_val].equal(meta)) {
                 return Error.NonIdempotentWrite;
@@ -112,8 +112,8 @@ pub const ComponentRegistry = struct {
 
         const rv = ComponentId{ .val = self.meta_list.items.len, .registry = self };
 
-        try self.address_to_id.put(self.allocator, address, rv.val);
-        errdefer _ = self.address_to_id.remove(address);
+        try self.address_to_id.put(self.allocator, addr.val, rv.val);
+        errdefer _ = self.address_to_id.remove(addr.val);
 
         try self.meta_list.append(self.allocator, meta);
         errdefer _ = self.meta_list.pop();
@@ -131,8 +131,8 @@ pub const ComponentRegistry = struct {
     }
 
     pub fn getId(self: *const Self, comptime T: type) ?ComponentId {
-        const address = typeAddress(T);
-        if (self.address_to_id.get(address)) |id_val| {
+        const addr = TypeAddress.of(T);
+        if (self.address_to_id.get(addr.val)) |id_val| {
             return ComponentId{ .val = id_val, .registry = self };
         } else {
             return null;
