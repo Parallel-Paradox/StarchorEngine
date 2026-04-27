@@ -3,7 +3,9 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 pub const TypeAddress = struct {
-    val: usize,
+    pub const INVALID_ADDRESS: usize = 0;
+
+    val: usize = INVALID_ADDRESS,
 
     pub fn of(comptime T: type) TypeAddress {
         const S = struct {
@@ -36,12 +38,18 @@ pub const TypeId = struct {
 };
 
 pub const TypeMeta = struct {
+    type_addr: TypeAddress,
     size: usize,
     alignment: usize,
     name: []const u8,
 
     pub fn init(comptime T: type) TypeMeta {
-        return TypeMeta{ .size = @sizeOf(T), .alignment = @alignOf(T), .name = @typeName(T) };
+        return TypeMeta{
+            .type_addr = TypeAddress.of(T),
+            .size = @sizeOf(T),
+            .alignment = @alignOf(T),
+            .name = @typeName(T),
+        };
     }
 };
 
@@ -49,13 +57,13 @@ pub const TypeRegistry = struct {
     const Self = @This();
 
     allocator: Allocator,
-    address_to_id: std.AutoHashMapUnmanaged(usize, TypeId.Val),
+    address_to_id: std.AutoHashMapUnmanaged(TypeAddress, TypeId.Val),
     meta_list: std.ArrayList(TypeMeta),
 
     pub fn init(allocator: Allocator) Self {
         return .{
             .allocator = allocator,
-            .address_to_id = std.AutoHashMapUnmanaged(usize, TypeId.Val).empty,
+            .address_to_id = std.AutoHashMapUnmanaged(TypeAddress, TypeId.Val).empty,
             .meta_list = std.ArrayList(TypeMeta).empty,
         };
     }
@@ -67,15 +75,15 @@ pub const TypeRegistry = struct {
 
     pub fn register(self: *Self, comptime T: type) Allocator.Error!TypeId {
         const addr = TypeAddress.of(T);
-        const get_id_val = self.address_to_id.get(addr.val);
+        const get_id_val = self.address_to_id.get(addr);
         if (get_id_val) |id_val| {
             return .{ .val = id_val, .registry = self };
         }
 
         const rv = TypeId{ .val = self.meta_list.items.len, .registry = self };
 
-        try self.address_to_id.put(self.allocator, addr.val, rv.val);
-        errdefer _ = self.address_to_id.remove(addr.val);
+        try self.address_to_id.put(self.allocator, addr, rv.val);
+        errdefer _ = self.address_to_id.remove(addr);
 
         const meta = TypeMeta.init(T);
         try self.meta_list.append(self.allocator, meta);
@@ -93,9 +101,13 @@ pub const TypeRegistry = struct {
         return rv;
     }
 
-    pub fn getId(self: *const Self, comptime T: type) ?TypeId {
+    pub fn getIdByType(self: *const Self, comptime T: type) ?TypeId {
         const addr = TypeAddress.of(T);
-        if (self.address_to_id.get(addr.val)) |id_val| {
+        return self.getIdByAddress(addr);
+    }
+
+    pub fn getIdByAddress(self: *const Self, addr: TypeAddress) ?TypeId {
+        if (self.address_to_id.get(addr)) |id_val| {
             return TypeId{ .val = id_val, .registry = self };
         } else {
             return null;
@@ -145,7 +157,7 @@ test "register returns stable id for same type and stores correct meta" {
     try expectEqual(@alignOf(u32), meta.alignment);
     try expectEqualStrings(@typeName(u32), meta.name);
 
-    const lookup = registry.getId(u32).?;
+    const lookup = registry.getIdByType(u32).?;
     try expect(lookup.equal(id1));
 }
 
@@ -164,7 +176,7 @@ test "getId returns null for unregistered type" {
     var registry = TypeRegistry.init(std.testing.allocator);
     defer registry.deinit();
 
-    try expect(registry.getId(u64) == null);
+    try expect(registry.getIdByType(u64) == null);
 }
 
 test "registerMeta appends metadata without adding typed lookup entry" {
@@ -172,6 +184,7 @@ test "registerMeta appends metadata without adding typed lookup entry" {
     defer registry.deinit();
 
     const meta = TypeMeta{
+        .type_addr = TypeAddress{ .val = 12345 },
         .size = 13,
         .alignment = 1,
         .name = "custom.meta",
@@ -179,6 +192,7 @@ test "registerMeta appends metadata without adding typed lookup entry" {
 
     const meta_id = try registry.registerMeta(meta);
     const stored_meta = meta_id.getMeta();
+    try expectEqual(@as(usize, 12345), stored_meta.type_addr.val);
     try expectEqual(@as(usize, 13), stored_meta.size);
     try expectEqual(@as(usize, 1), stored_meta.alignment);
     try expectEqualStrings("custom.meta", stored_meta.name);

@@ -46,6 +46,7 @@ pub const ComponentMeta = struct {
         };
     }
 
+    type_addr: TypeAddress,
     vtable: VTable(anyopaque),
 
     pub fn init(comptime T: type, comptime vtable: VTable(T)) ComponentMeta {
@@ -63,6 +64,7 @@ pub const ComponentMeta = struct {
         };
 
         return ComponentMeta{
+            .type_addr = TypeAddress.of(T),
             .vtable = .{
                 .deinit_fn = VTableImpl.deinit,
                 .move_fn = VTableImpl.move,
@@ -79,13 +81,13 @@ pub const ComponentRegistry = struct {
     const Self = @This();
 
     allocator: Allocator,
-    address_to_id: std.AutoHashMapUnmanaged(usize, ComponentId.Val),
+    address_to_id: std.AutoHashMapUnmanaged(TypeAddress, ComponentId.Val),
     meta_list: std.ArrayList(ComponentMeta),
 
     pub fn init(allocator: Allocator) Self {
         return .{
             .allocator = allocator,
-            .address_to_id = std.AutoHashMapUnmanaged(usize, ComponentId.Val).empty,
+            .address_to_id = std.AutoHashMapUnmanaged(TypeAddress, ComponentId.Val).empty,
             .meta_list = std.ArrayList(ComponentMeta).empty,
         };
     }
@@ -102,7 +104,7 @@ pub const ComponentRegistry = struct {
 
     pub fn register(self: *Self, comptime T: type, meta: ComponentMeta) Error!ComponentId {
         const addr = TypeAddress.of(T);
-        const get_id_val = self.address_to_id.get(addr.val);
+        const get_id_val = self.address_to_id.get(addr);
         if (get_id_val) |id_val| {
             if (!self.meta_list.items[id_val].equal(meta)) {
                 return Error.NonIdempotentWrite;
@@ -112,8 +114,8 @@ pub const ComponentRegistry = struct {
 
         const rv = ComponentId{ .val = self.meta_list.items.len, .registry = self };
 
-        try self.address_to_id.put(self.allocator, addr.val, rv.val);
-        errdefer _ = self.address_to_id.remove(addr.val);
+        try self.address_to_id.put(self.allocator, addr, rv.val);
+        errdefer _ = self.address_to_id.remove(addr);
 
         try self.meta_list.append(self.allocator, meta);
         errdefer _ = self.meta_list.pop();
@@ -130,9 +132,13 @@ pub const ComponentRegistry = struct {
         return rv;
     }
 
-    pub fn getId(self: *const Self, comptime T: type) ?ComponentId {
+    pub fn getIdByType(self: *const Self, comptime T: type) ?ComponentId {
         const addr = TypeAddress.of(T);
-        if (self.address_to_id.get(addr.val)) |id_val| {
+        return self.getIdByAddress(addr);
+    }
+
+    pub fn getIdByAddress(self: *const Self, addr: TypeAddress) ?ComponentId {
+        if (self.address_to_id.get(addr)) |id_val| {
             return ComponentId{ .val = id_val, .registry = self };
         } else {
             return null;
@@ -238,7 +244,7 @@ test "register is idempotent for same type when meta is identical" {
     stored.vtable.move_fn(@ptrCast(&dst), @ptrCast(&src));
     try expectEqual(@as(i32, 3), dst.value);
 
-    const lookup = registry.getId(T).?;
+    const lookup = registry.getIdByType(T).?;
     try expect(lookup.equal(id1));
 }
 
@@ -295,7 +301,7 @@ test "getId returns null for unregistered type" {
     var registry = ComponentRegistry.init(std.testing.allocator);
     defer registry.deinit();
 
-    try expect(registry.getId(u64) == null);
+    try expect(registry.getIdByType(u64) == null);
 }
 
 test "registerMeta appends metadata without adding typed lookup entry" {
@@ -306,7 +312,7 @@ test "registerMeta appends metadata without adding typed lookup entry" {
     _ = meta_id.getMeta();
 
     try expectEqual(@as(u32, 0), registry.address_to_id.size);
-    try expect(registry.getId(u32) == null);
+    try expect(registry.getIdByType(u32) == null);
 }
 
 test "ComponentId equality includes registry identity" {

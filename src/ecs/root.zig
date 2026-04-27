@@ -17,6 +17,8 @@ pub const entity = struct {
     pub const EntitySignature = entity_id.EntitySignature;
 
     const archetype_meta = @import("entity/archetype_meta.zig");
+    pub const ArchetypeSignature = archetype_meta.ArchetypeSignature;
+    pub const ArchetypeMeta = archetype_meta.ArchetypeMeta;
 
     const data_chunk = @import("entity/data_chunk.zig");
 };
