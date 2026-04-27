@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const ecs = @import("../root.zig");
+const root = @import("../root.zig");
+const ecs = root.ecs;
 
 const Allocator = std.mem.Allocator;
 const TypeAddress = ecs.component.TypeAddress;
@@ -124,7 +125,7 @@ pub const ComponentRegistry = struct {
     }
 
     pub fn registerMeta(self: *Self, meta: ComponentMeta) Allocator.Error!ComponentId {
-        std.debug.assert(meta.type_addr != TypeAddress.INVALID_ADDRESS);
+        std.debug.assert(meta.type_addr.val != TypeAddress.INVALID_ADDRESS);
 
         const rv = ComponentId{ .val = self.meta_list.items.len, .registry = self };
 

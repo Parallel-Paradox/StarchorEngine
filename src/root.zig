@@ -1,2 +1,2 @@
-pub const base = @import("base");
-pub const ecs = @import("ecs");
+pub const base = @import("base").base;
+pub const ecs = @import("ecs").ecs;

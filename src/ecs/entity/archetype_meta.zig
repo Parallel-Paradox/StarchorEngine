@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const ecs = @import("../root.zig");
+const root = @import("../root.zig");
+const ecs = root.ecs;
 
 const Allocator = std.mem.Allocator;
 const TypeId = ecs.component.TypeId;
