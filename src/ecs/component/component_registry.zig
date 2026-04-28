@@ -26,7 +26,9 @@ pub const ComponentId = struct {
 pub const ComponentMeta = struct {
     pub fn VTable(comptime T: type) type {
         return struct {
+            /// Called when an instance of the component is destructed. Useful for releasing resources.
             pub const Deinit = *const fn (self: *T) void;
+            /// Called when an instance of the component is moved in memory. Useful for self referenced data.
             pub const Move = *const fn (dst: *T, src: *T) void;
 
             deinit_fn: Deinit = deinit,

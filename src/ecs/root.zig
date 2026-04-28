@@ -32,4 +32,5 @@ test {
     _ = ecs.component.component_registry;
     _ = ecs.entity.entity_id;
     _ = ecs.entity.archetype_meta;
+    _ = ecs.entity.archetype_chunk;
 }
