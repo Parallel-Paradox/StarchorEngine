@@ -24,6 +24,10 @@ pub const ecs = struct {
         pub const ArchetypeMeta = archetype_meta.ArchetypeMeta;
 
         const archetype_chunk = @import("entity/archetype_chunk.zig");
+        pub const ArchetypeChunk = archetype_chunk.ArchetypeChunk;
+
+        const archetype = @import("entity/archetype.zig");
+        pub const Archetype = archetype.Archetype;
     };
 };
 
@@ -33,4 +37,5 @@ test {
     _ = ecs.entity.entity_id;
     _ = ecs.entity.archetype_meta;
     _ = ecs.entity.archetype_chunk;
+    _ = ecs.entity.archetype;
 }

@@ -121,6 +121,10 @@ pub const ArchetypeChunk = struct {
                 offset += stride * self.capacity;
             }
         }
+
+        pub fn byteLen(self: *Layout) usize {
+            return AlignedBuffer.alignedToOriginal(self.buffer_size, self.buffer_alignment);
+        }
     };
 
     allocator: Allocator,
@@ -203,6 +207,7 @@ pub const ArchetypeChunk = struct {
         const capacity = self.layout.capacity - self.len;
         const push_count = eid.len;
         const pushed_count: usize = @min(capacity, push_count);
+        defer self.len += pushed_count;
 
         const comp_registry = self.layout.meta.comp_registry;
         for (columns, self.layout.column_offsets.items, self.layout.meta.columns.items) |push_col, offset, col_meta| {
@@ -226,11 +231,10 @@ pub const ArchetypeChunk = struct {
             dst[i] = src[i];
         }
 
-        self.len += pushed_count;
         return pushed_count;
     }
 
-    /// Buffer are filled by the tail of chunk. Return the count of entities that are successfully popped.
+    /// Buffer are filled with the tail of chunk. Return the count of entities that are successfully popped.
     pub fn pop(self: *Self, eid: []EntityId, columns: []?ColumnBuffer) usize {
         std.debug.assert(columns.len > 0);
         std.debug.assert(columns.len == self.layout.column_offsets.items.len);
@@ -242,6 +246,7 @@ pub const ArchetypeChunk = struct {
 
         const pop_count = eid.len;
         const popped_count: usize = @min(self.len, pop_count);
+        defer self.len -= popped_count;
 
         const comp_registry = self.layout.meta.comp_registry;
         for (
@@ -281,8 +286,6 @@ pub const ArchetypeChunk = struct {
         for (0..popped_count) |i| {
             dst[i] = src[i];
         }
-
-        self.len -= popped_count;
         return popped_count;
     }
 
@@ -336,29 +339,81 @@ const ArchetypeChunkTestContext = struct {
     ) (Allocator.Error || ArchetypeMeta.InitError)!ArchetypeMeta {
         return ArchetypeMeta.init(self.type_registry.allocator, &self.type_registry, &self.comp_registry, columns);
     }
+
+    pub fn makeLayout(meta: *const ArchetypeMeta, capacity: usize) Allocator.Error!ArchetypeChunk.Layout {
+        var layout = try ArchetypeChunk.Layout.init(std.testing.allocator, meta);
+        layout.resetCapacity(capacity);
+        return layout;
+    }
+
+    const RegisterError = Allocator.Error || ComponentRegistry.Error;
+
+    pub fn registerBasicColumns(self: *Self) RegisterError![2]ArchetypeMeta.Column {
+        const tid_u64 = try self.type_registry.register(u64);
+        const tid_u32 = try self.type_registry.register(u32);
+        const cid_u64 = try self.comp_registry.register(u64, ComponentMeta.init(u64, .{}));
+        const cid_u32 = try self.comp_registry.register(u32, ComponentMeta.init(u32, .{}));
+
+        return .{
+            .{ .type_id_val = tid_u32.val, .comp_id_val = cid_u32.val },
+            .{ .type_id_val = tid_u64.val, .comp_id_val = cid_u64.val },
+        };
+    }
+
+    pub fn makeSingleColumnMeta(
+        self: *Self,
+        comptime T: type,
+        comp_meta: ComponentMeta,
+    ) (RegisterError || ArchetypeMeta.InitError)!ArchetypeMeta {
+        const tid = try self.type_registry.register(T);
+        const cid = try self.comp_registry.register(T, comp_meta);
+        const columns = [_]ArchetypeMeta.Column{
+            .{ .type_id_val = tid.val, .comp_id_val = cid.val },
+        };
+        return self.makeMeta(&columns);
+    }
+};
+
+const TrackedCounter = struct {
+    var deinit_count: usize = 0;
+    var move_count: usize = 0;
+
+    fn reset() void {
+        deinit_count = 0;
+        move_count = 0;
+    }
+};
+
+const Tracked = struct {
+    value: u32,
+
+    fn deinit(_: *Tracked) void {
+        TrackedCounter.deinit_count += 1;
+    }
+
+    fn move(dst: *Tracked, src: *Tracked) void {
+        TrackedCounter.move_count += 1;
+        dst.* = src.*;
+    }
+
+    fn componentMeta() ComponentMeta {
+        return ComponentMeta.init(Tracked, .{
+            .deinit_fn = deinit,
+            .move_fn = move,
+        });
+    }
 };
 
 test "Layout resetCapacity and resetByteLen are consistent" {
     var ctx = ArchetypeChunkTestContext.init(std.testing.allocator);
     defer ctx.deinit();
 
-    const tid_u64 = try ctx.type_registry.register(u64);
-    const tid_u32 = try ctx.type_registry.register(u32);
-    const cid_u64 = try ctx.comp_registry.register(u64, ComponentMeta.init(u64, .{}));
-    const cid_u32 = try ctx.comp_registry.register(u32, ComponentMeta.init(u32, .{}));
-
-    const columns = [_]ArchetypeMeta.Column{
-        .{ .type_id_val = tid_u32.val, .comp_id_val = cid_u32.val },
-        .{ .type_id_val = tid_u64.val, .comp_id_val = cid_u64.val },
-    };
-
-    var meta = try ctx.makeMeta(&columns);
+    const basic = try ctx.registerBasicColumns();
+    var meta = try ctx.makeMeta(&basic);
     defer meta.deinit();
 
-    var layout = try ArchetypeChunk.Layout.init(std.testing.allocator, &meta);
+    var layout = try ArchetypeChunkTestContext.makeLayout(&meta, 5);
     defer layout.deinit();
-
-    layout.resetCapacity(5);
 
     try expectEqual(@as(usize, 5), layout.capacity);
     try expectEqual(@as(usize, @alignOf(EntityId)), layout.buffer_alignment);
@@ -384,22 +439,12 @@ test "ArchetypeChunk push and pop move entity ids and columns" {
     var ctx = ArchetypeChunkTestContext.init(std.testing.allocator);
     defer ctx.deinit();
 
-    const tid_u64 = try ctx.type_registry.register(u64);
-    const tid_u32 = try ctx.type_registry.register(u32);
-    const cid_u64 = try ctx.comp_registry.register(u64, ComponentMeta.init(u64, .{}));
-    const cid_u32 = try ctx.comp_registry.register(u32, ComponentMeta.init(u32, .{}));
-
-    const columns = [_]ArchetypeMeta.Column{
-        .{ .type_id_val = tid_u32.val, .comp_id_val = cid_u32.val },
-        .{ .type_id_val = tid_u64.val, .comp_id_val = cid_u64.val },
-    };
-
-    var meta = try ctx.makeMeta(&columns);
+    const basic = try ctx.registerBasicColumns();
+    var meta = try ctx.makeMeta(&basic);
     defer meta.deinit();
 
-    var layout = try ArchetypeChunk.Layout.init(std.testing.allocator, &meta);
+    var layout = try ArchetypeChunkTestContext.makeLayout(&meta, 3);
     defer layout.deinit();
-    layout.resetCapacity(3);
 
     var chunk = try ArchetypeChunk.init(std.testing.allocator, &layout);
     defer chunk.deinit();
@@ -461,49 +506,13 @@ test "ArchetypeChunk pop supports null column outputs" {
     var ctx = ArchetypeChunkTestContext.init(std.testing.allocator);
     defer ctx.deinit();
 
-    const Counter = struct {
-        var deinit_count: usize = 0;
-        var move_count: usize = 0;
+    TrackedCounter.reset();
 
-        fn reset() void {
-            deinit_count = 0;
-            move_count = 0;
-        }
-    };
-
-    const Tracked = struct {
-        value: u32,
-    };
-
-    const VTable = struct {
-        fn deinit(_: *Tracked) void {
-            Counter.deinit_count += 1;
-        }
-
-        fn move(dst: *Tracked, src: *Tracked) void {
-            Counter.move_count += 1;
-            dst.* = src.*;
-        }
-    };
-
-    Counter.reset();
-
-    const tid = try ctx.type_registry.register(Tracked);
-    const cid = try ctx.comp_registry.register(Tracked, ComponentMeta.init(Tracked, .{
-        .deinit_fn = VTable.deinit,
-        .move_fn = VTable.move,
-    }));
-
-    const columns = [_]ArchetypeMeta.Column{
-        .{ .type_id_val = tid.val, .comp_id_val = cid.val },
-    };
-
-    var meta = try ctx.makeMeta(&columns);
+    var meta = try ctx.makeSingleColumnMeta(Tracked, Tracked.componentMeta());
     defer meta.deinit();
 
-    var layout = try ArchetypeChunk.Layout.init(std.testing.allocator, &meta);
+    var layout = try ArchetypeChunkTestContext.makeLayout(&meta, 2);
     defer layout.deinit();
-    layout.resetCapacity(2);
 
     var chunk = try ArchetypeChunk.init(std.testing.allocator, &layout);
     defer chunk.deinit();
@@ -516,7 +525,7 @@ test "ArchetypeChunk pop supports null column outputs" {
     var in_cols = [_]ArchetypeChunk.ColumnBuffer{ArchetypeChunk.ColumnBuffer.init(Tracked, in_tracked[0..])};
 
     try expectEqual(@as(usize, 2), chunk.push(in_ids[0..], in_cols[0..]));
-    try expectEqual(@as(usize, 2), Counter.move_count);
+    try expectEqual(@as(usize, 2), TrackedCounter.move_count);
 
     var out_ids = [_]EntityId{.{}};
     var out_cols = [_]?ArchetypeChunk.ColumnBuffer{null};
@@ -525,53 +534,20 @@ test "ArchetypeChunk pop supports null column outputs" {
     try expectEqual(@as(usize, 1), popped);
     try expectEqual(@as(usize, 1), chunk.len);
     try expectEqual(@as(usize, 2), out_ids[0].val);
-    try expectEqual(@as(usize, 1), Counter.deinit_count);
+    try expectEqual(@as(usize, 1), TrackedCounter.deinit_count);
 }
 
 test "ArchetypeChunk removeTail runs component deinit" {
     var ctx = ArchetypeChunkTestContext.init(std.testing.allocator);
     defer ctx.deinit();
 
-    const Counter = struct {
-        var deinit_count: usize = 0;
+    TrackedCounter.reset();
 
-        fn reset() void {
-            deinit_count = 0;
-        }
-    };
-
-    const Tracked = struct {
-        value: u32,
-    };
-
-    const VTable = struct {
-        fn deinit(_: *Tracked) void {
-            Counter.deinit_count += 1;
-        }
-
-        fn move(dst: *Tracked, src: *Tracked) void {
-            dst.* = src.*;
-        }
-    };
-
-    Counter.reset();
-
-    const tid = try ctx.type_registry.register(Tracked);
-    const cid = try ctx.comp_registry.register(Tracked, ComponentMeta.init(Tracked, .{
-        .deinit_fn = VTable.deinit,
-        .move_fn = VTable.move,
-    }));
-
-    const columns = [_]ArchetypeMeta.Column{
-        .{ .type_id_val = tid.val, .comp_id_val = cid.val },
-    };
-
-    var meta = try ctx.makeMeta(&columns);
+    var meta = try ctx.makeSingleColumnMeta(Tracked, Tracked.componentMeta());
     defer meta.deinit();
 
-    var layout = try ArchetypeChunk.Layout.init(std.testing.allocator, &meta);
+    var layout = try ArchetypeChunkTestContext.makeLayout(&meta, 3);
     defer layout.deinit();
-    layout.resetCapacity(3);
 
     var chunk = try ArchetypeChunk.init(std.testing.allocator, &layout);
     defer chunk.deinit();
@@ -588,5 +564,5 @@ test "ArchetypeChunk removeTail runs component deinit" {
 
     chunk.removeTail(2);
     try expectEqual(@as(usize, 1), chunk.len);
-    try expectEqual(@as(usize, 2), Counter.deinit_count);
+    try expectEqual(@as(usize, 2), TrackedCounter.deinit_count);
 }
