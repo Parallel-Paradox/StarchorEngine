@@ -7,14 +7,6 @@ const Allocator = std.mem.Allocator;
 const ComponentId = ecs.component.ComponentId;
 const ComponentRegistry = ecs.component.ComponentRegistry;
 
-pub const EntityId = struct {
-    pub const INVALID_ID: usize = std.math.maxInt(usize);
-    pub const TOMB_GENERATION: usize = std.math.maxInt(usize);
-
-    val: usize = INVALID_ID,
-    generation: usize = TOMB_GENERATION,
-};
-
 pub const EntitySignature = struct {
     const Self = @This();
 
@@ -97,12 +89,6 @@ pub const EntitySignature = struct {
 
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
-
-test "EntityId default is tombstone sentinel" {
-    const id = EntityId{};
-    try expectEqual(EntityId.INVALID_ID, id.val);
-    try expectEqual(EntityId.TOMB_GENERATION, id.generation);
-}
 
 test "EntitySignature add and has" {
     var signature = EntitySignature.init(std.testing.allocator);

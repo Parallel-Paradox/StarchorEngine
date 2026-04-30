@@ -15,9 +15,8 @@ pub const ecs = struct {
     };
 
     pub const entity = struct {
-        const entity_id = @import("entity/entity_id.zig");
-        pub const EntityId = entity_id.EntityId;
-        pub const EntitySignature = entity_id.EntitySignature;
+        const entity_signature = @import("entity/entity_signature.zig");
+        pub const EntitySignature = entity_signature.EntitySignature;
 
         const archetype_meta = @import("entity/archetype_meta.zig");
         pub const ArchetypeSignature = archetype_meta.ArchetypeSignature;
@@ -28,14 +27,18 @@ pub const ecs = struct {
 
         const archetype = @import("entity/archetype.zig");
         pub const Archetype = archetype.Archetype;
+
+        const entity_registry = @import("entity/entity_registry.zig");
+        pub const EntityId = entity_registry.EntityId;
     };
 };
 
 test {
     _ = ecs.component.type_registry;
     _ = ecs.component.component_registry;
-    _ = ecs.entity.entity_id;
+    _ = ecs.entity.entity_signature;
     _ = ecs.entity.archetype_meta;
     _ = ecs.entity.archetype_chunk;
     _ = ecs.entity.archetype;
+    _ = ecs.entity.entity_registry;
 }
