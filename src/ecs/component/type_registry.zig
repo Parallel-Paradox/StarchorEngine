@@ -7,12 +7,12 @@ pub const TypeAddress = struct {
 
     val: usize = INVALID_ADDRESS,
 
-    pub fn of(comptime T: type) TypeAddress {
+    pub fn of(comptime T: type) @This() {
         const S = struct {
             const Type = T; // Instantiate per type to get unique address
             var dummy: u8 = 0;
         };
-        return TypeAddress{ .val = @intFromPtr(&S.dummy) };
+        return @This(){ .val = @intFromPtr(&S.dummy) };
     }
 };
 
@@ -23,12 +23,12 @@ pub const TypeId = struct {
     val: Val = INVALID_ID,
     registry: *const TypeRegistry,
 
-    pub fn equal(self: TypeId, other: TypeId) bool {
+    pub fn equal(self: @This(), other: @This()) bool {
         return self.val == other.val and self.registry == other.registry;
     }
 
     /// Make sure the registry is valid and the meta is registered before calling this function.
-    pub fn meta(self: TypeId) TypeMeta {
+    pub fn meta(self: @This()) TypeMeta {
         return self.registry.getMeta(self);
     }
 };
@@ -39,8 +39,8 @@ pub const TypeMeta = struct {
     alignment: usize,
     name: []const u8,
 
-    pub fn init(comptime T: type) TypeMeta {
-        return TypeMeta{
+    pub fn init(comptime T: type) @This() {
+        return @This(){
             .type_addr = TypeAddress.of(T),
             .size = @sizeOf(T),
             .alignment = @alignOf(T),
@@ -50,26 +50,24 @@ pub const TypeMeta = struct {
 };
 
 pub const TypeRegistry = struct {
-    const Self = @This();
-
     allocator: Allocator,
     address_to_id: std.AutoHashMapUnmanaged(TypeAddress, TypeId.Val),
     meta_list: std.ArrayList(TypeMeta),
 
-    pub fn init(allocator: Allocator) Self {
-        return .{
+    pub fn init(allocator: Allocator) @This() {
+        return @This(){
             .allocator = allocator,
             .address_to_id = std.AutoHashMapUnmanaged(TypeAddress, TypeId.Val).empty,
             .meta_list = std.ArrayList(TypeMeta).empty,
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         self.address_to_id.deinit(self.allocator);
         self.meta_list.deinit(self.allocator);
     }
 
-    pub fn register(self: *Self, comptime T: type) Allocator.Error!TypeId {
+    pub fn register(self: *@This(), comptime T: type) Allocator.Error!TypeId {
         const addr = TypeAddress.of(T);
         const get_id_val = self.address_to_id.get(addr);
         if (get_id_val) |id_val| {
@@ -88,7 +86,7 @@ pub const TypeRegistry = struct {
         return rv;
     }
 
-    pub fn registerMeta(self: *Self, meta: TypeMeta) Allocator.Error!TypeId {
+    pub fn registerMeta(self: *@This(), meta: TypeMeta) Allocator.Error!TypeId {
         std.debug.assert(meta.type_addr.val != TypeAddress.INVALID_ADDRESS);
         std.debug.assert(std.math.isPowerOfTwo(meta.alignment));
 
@@ -100,12 +98,12 @@ pub const TypeRegistry = struct {
         return rv;
     }
 
-    pub fn getIdByType(self: *const Self, comptime T: type) ?TypeId {
+    pub fn getIdByType(self: *const @This(), comptime T: type) ?TypeId {
         const addr = TypeAddress.of(T);
         return self.getIdByAddress(addr);
     }
 
-    pub fn getIdByAddress(self: *const Self, addr: TypeAddress) ?TypeId {
+    pub fn getIdByAddress(self: *const @This(), addr: TypeAddress) ?TypeId {
         if (self.address_to_id.get(addr)) |id_val| {
             return TypeId{ .val = id_val, .registry = self };
         } else {
@@ -113,7 +111,7 @@ pub const TypeRegistry = struct {
         }
     }
 
-    pub fn tryGetMeta(self: *const Self, id: TypeId) ?TypeMeta {
+    pub fn tryGetMeta(self: *const @This(), id: TypeId) ?TypeMeta {
         if (id.registry != self or id.val >= self.meta_list.items.len) {
             return null;
         }
@@ -121,7 +119,7 @@ pub const TypeRegistry = struct {
     }
 
     /// Make sure the id is valid before calling this function.
-    pub fn getMeta(self: *const Self, id: TypeId) TypeMeta {
+    pub fn getMeta(self: *const @This(), id: TypeId) TypeMeta {
         std.debug.assert(id.registry == self);
         std.debug.assert(id.val < self.meta_list.items.len);
         return self.meta_list.items[id.val];

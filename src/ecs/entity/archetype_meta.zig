@@ -13,8 +13,6 @@ const ComponentRegistry = ecs.component.ComponentRegistry;
 pub const ArchetypeSignature = ecs.entity.EntitySignature;
 
 pub const ArchetypeMeta = struct {
-    const Self = @This();
-
     pub const Column = struct {
         type_id_val: TypeId.Val,
         comp_id_val: ComponentId.Val,
@@ -44,7 +42,7 @@ pub const ArchetypeMeta = struct {
         type_registry: *const TypeRegistry,
         comp_registry: *const ComponentRegistry,
         unsorted_columns: []const Column,
-    ) InitError!Self {
+    ) InitError!@This() {
         if (unsorted_columns.len == 0) {
             return InitError.EmptyArchetype;
         }
@@ -111,7 +109,7 @@ pub const ArchetypeMeta = struct {
             try column_lookup.put(allocator, col.comp_id_val, idx);
         }
 
-        return Self{
+        return @This(){
             .allocator = allocator,
             .signature = signature,
             .columns = columns,
@@ -121,7 +119,7 @@ pub const ArchetypeMeta = struct {
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         self.signature.deinit();
         self.columns.deinit(self.allocator);
         self.column_lookup.deinit(self.allocator);
@@ -133,25 +131,23 @@ const expectEqual = std.testing.expectEqual;
 const expectError = std.testing.expectError;
 
 const ArchetypeMetaTestContext = struct {
-    const Self = @This();
-
     type_registry: TypeRegistry,
     comp_registry: ComponentRegistry,
 
-    pub fn init(allocator: Allocator) Self {
-        return Self{
+    pub fn init(allocator: Allocator) @This() {
+        return @This(){
             .type_registry = TypeRegistry.init(allocator),
             .comp_registry = ComponentRegistry.init(allocator),
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         self.type_registry.deinit();
         self.comp_registry.deinit();
     }
 
     const MockError = Allocator.Error || ComponentRegistry.Error;
-    pub fn mockRegistry(self: *Self) MockError!void {
+    pub fn mockRegistry(self: *@This()) MockError!void {
         _ = try self.type_registry.register(u64);
         _ = try self.type_registry.register([2]u32);
         _ = try self.type_registry.register(u32);
@@ -163,7 +159,7 @@ const ArchetypeMetaTestContext = struct {
         _ = try self.comp_registry.register(i32, ComponentMeta.init(i32, .{}));
     }
 
-    pub fn generateMockMeta(self: *Self) (MockError || ArchetypeMeta.InitError)!ArchetypeMeta {
+    pub fn generateMockMeta(self: *@This()) (MockError || ArchetypeMeta.InitError)!ArchetypeMeta {
         try self.mockRegistry();
 
         const columns = [_]ArchetypeMeta.Column{

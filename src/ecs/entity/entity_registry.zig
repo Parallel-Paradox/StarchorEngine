@@ -6,6 +6,10 @@ pub const EntityId = struct {
 
     val: usize = INVALID_ID,
     generation: usize = TOMB_GENERATION,
+
+    pub fn equal(self: @This(), other: @This()) bool {
+        return self.val == other.val and self.generation == other.generation;
+    }
 };
 
 const expectEqual = std.testing.expectEqual;

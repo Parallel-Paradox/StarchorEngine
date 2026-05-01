@@ -29,8 +29,6 @@ test "the principle of type erasure" {
 }
 
 pub const ArchetypeChunk = struct {
-    const Self = @This();
-
     pub const Layout = struct {
         allocator: Allocator,
         meta: *const ArchetypeMeta,
@@ -40,7 +38,7 @@ pub const ArchetypeChunk = struct {
         column_offsets: std.ArrayList(usize),
         entity_id_offset: usize,
 
-        pub fn init(allocator: Allocator, meta: *const ArchetypeMeta) Allocator.Error!Layout {
+        pub fn init(allocator: Allocator, meta: *const ArchetypeMeta) Allocator.Error!@This() {
             var column_offsets = try std.ArrayList(usize).initCapacity(allocator, meta.columns.items.len);
             errdefer column_offsets.deinit(allocator);
             for (0..meta.columns.items.len) |_| {
@@ -54,7 +52,7 @@ pub const ArchetypeChunk = struct {
             const first_align = first_type_id.meta().alignment;
             const buffer_alignment = @max(eid_align, first_align);
 
-            return .{
+            return @This(){
                 .allocator = allocator,
                 .meta = meta,
                 .capacity = 0,
@@ -65,12 +63,12 @@ pub const ArchetypeChunk = struct {
             };
         }
 
-        pub fn deinit(self: *Layout) void {
+        pub fn deinit(self: *@This()) void {
             self.column_offsets.deinit(self.allocator);
         }
 
         /// Reset layout with a given entity capacity.
-        pub fn resetCapacity(self: *Layout, capacity: usize) void {
+        pub fn resetCapacity(self: *@This(), capacity: usize) void {
             self.capacity = capacity;
             std.debug.assert(self.column_offsets.items.len == self.meta.columns.items.len);
 
@@ -91,7 +89,7 @@ pub const ArchetypeChunk = struct {
         }
 
         /// Reset layout with a given buffer original byte length.
-        pub fn resetByteLen(self: *Layout, byte_len: usize) void {
+        pub fn resetByteLen(self: *@This(), byte_len: usize) void {
             self.buffer_size = AlignedBuffer.originalToAligned(byte_len, self.buffer_alignment);
             std.debug.assert(self.column_offsets.items.len == self.meta.columns.items.len);
 
@@ -122,7 +120,7 @@ pub const ArchetypeChunk = struct {
             }
         }
 
-        pub fn byteLen(self: *Layout) usize {
+        pub fn byteLen(self: *@This()) usize {
             return AlignedBuffer.alignedToOriginal(self.buffer_size, self.buffer_alignment);
         }
     };
@@ -133,9 +131,9 @@ pub const ArchetypeChunk = struct {
     /// The count of entities currently stored in the chunk. Always less than or equal to `layout.capacity`.
     len: usize,
 
-    pub fn init(allocator: Allocator, layout: *const Layout) Allocator.Error!Self {
+    pub fn init(allocator: Allocator, layout: *const Layout) Allocator.Error!@This() {
         std.debug.assert(layout.column_offsets.items.len > 0); // Empty layout is not allowed.
-        return Self{
+        return @This(){
             .allocator = allocator,
             .layout = layout,
             .buffer = try AlignedBuffer.init(allocator, layout.buffer_size, layout.buffer_alignment),
@@ -143,13 +141,13 @@ pub const ArchetypeChunk = struct {
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         self.removeTail(self.len);
         self.buffer.deinit(self.allocator);
     }
 
     /// Get the slice of EntityId that contains unoccupied slots. Used for writing new entities.
-    pub fn getEntityIdsUnsafe(self: Self) []EntityId {
+    pub fn getEntityIdsUnsafe(self: @This()) []EntityId {
         const offset = self.layout.entity_id_offset;
         const stride = @sizeOf(EntityId);
         const bytes = self.buffer.aligned[offset..][0 .. stride * self.layout.capacity];
@@ -158,7 +156,7 @@ pub const ArchetypeChunk = struct {
     }
 
     /// Get the slice of EntityId that contains only occupied slots. Always safe to read.
-    pub fn getEntityIds(self: Self) []EntityId {
+    pub fn getEntityIds(self: @This()) []EntityId {
         const ids = self.getEntityIdsUnsafe();
         return ids[0..self.len];
     }
@@ -168,8 +166,8 @@ pub const ArchetypeChunk = struct {
         stride: usize,
         capacity: usize,
 
-        pub fn init(comptime T: type, vals: []T) ArchetypeChunk.ColumnBuffer {
-            return .{
+        pub fn init(comptime T: type, vals: []T) @This() {
+            return @This(){
                 .bytes = std.mem.sliceAsBytes(vals),
                 .stride = @sizeOf(T),
                 .capacity = vals.len,
@@ -178,24 +176,24 @@ pub const ArchetypeChunk = struct {
     };
 
     /// Get the slice of the given column index that contains unoccupied slots. Used for writing new components.
-    pub fn getColumnUnsafe(self: Self, col_id: usize) ColumnBuffer {
+    pub fn getColumnUnsafe(self: @This(), col_id: usize) ColumnBuffer {
         const offset = self.layout.column_offsets.items[col_id];
         const type_id_val = self.layout.meta.columns.items[col_id].type_id_val;
         const type_id = TypeId{ .val = type_id_val, .registry = self.layout.meta.type_registry };
         const stride = type_id.meta().size;
         const bytes = self.buffer.aligned[offset..][0 .. stride * self.layout.capacity];
-        return .{ .bytes = bytes, .stride = stride, .capacity = self.layout.capacity };
+        return ColumnBuffer{ .bytes = bytes, .stride = stride, .capacity = self.layout.capacity };
     }
 
     /// Get the slice of the given column index that contains only occupied slots. Always safe to read.
-    pub fn getColumn(self: Self, col_id: usize) ColumnBuffer {
+    pub fn getColumn(self: @This(), col_id: usize) ColumnBuffer {
         const column = self.getColumnUnsafe(col_id);
         const occupied_bytes = column.bytes[0 .. column.stride * self.len];
-        return .{ .bytes = occupied_bytes, .stride = column.stride, .capacity = self.len };
+        return ColumnBuffer{ .bytes = occupied_bytes, .stride = column.stride, .capacity = self.len };
     }
 
     /// Buffer are pushed from front to back. Return the count of entities that are successfully pushed.
-    pub fn push(self: *Self, eid: []EntityId, columns: []ColumnBuffer) usize {
+    pub fn push(self: *@This(), eid: []EntityId, columns: []ColumnBuffer) usize {
         std.debug.assert(columns.len > 0);
         std.debug.assert(columns.len == self.layout.column_offsets.items.len);
         std.debug.assert(columns.len == self.layout.meta.columns.items.len);
@@ -235,7 +233,7 @@ pub const ArchetypeChunk = struct {
     }
 
     /// Buffer are filled with the tail of chunk. Return the count of entities that are successfully popped.
-    pub fn pop(self: *Self, eid: []EntityId, columns: []?ColumnBuffer) usize {
+    pub fn pop(self: *@This(), eid: []EntityId, columns: []?ColumnBuffer) usize {
         std.debug.assert(columns.len > 0);
         std.debug.assert(columns.len == self.layout.column_offsets.items.len);
         std.debug.assert(columns.len == self.layout.meta.columns.items.len);
@@ -289,7 +287,7 @@ pub const ArchetypeChunk = struct {
         return popped_count;
     }
 
-    pub fn removeTail(self: *Self, rm_cnt: usize) void {
+    pub fn removeTail(self: *@This(), rm_cnt: usize) void {
         const removed = @min(rm_cnt, self.len);
         if (removed == 0) {
             return;
@@ -316,25 +314,23 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
 const ArchetypeChunkTestContext = struct {
-    const Self = @This();
-
     type_registry: TypeRegistry,
     comp_registry: ComponentRegistry,
 
-    pub fn init(allocator: Allocator) Self {
-        return .{
+    pub fn init(allocator: Allocator) @This() {
+        return @This(){
             .type_registry = TypeRegistry.init(allocator),
             .comp_registry = ComponentRegistry.init(allocator),
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         self.type_registry.deinit();
         self.comp_registry.deinit();
     }
 
     pub fn makeMeta(
-        self: *Self,
+        self: *@This(),
         columns: []const ArchetypeMeta.Column,
     ) (Allocator.Error || ArchetypeMeta.InitError)!ArchetypeMeta {
         return ArchetypeMeta.init(self.type_registry.allocator, &self.type_registry, &self.comp_registry, columns);
@@ -348,7 +344,7 @@ const ArchetypeChunkTestContext = struct {
 
     const RegisterError = Allocator.Error || ComponentRegistry.Error;
 
-    pub fn registerBasicColumns(self: *Self) RegisterError![2]ArchetypeMeta.Column {
+    pub fn registerBasicColumns(self: *@This()) RegisterError![2]ArchetypeMeta.Column {
         const tid_u64 = try self.type_registry.register(u64);
         const tid_u32 = try self.type_registry.register(u32);
         const cid_u64 = try self.comp_registry.register(u64, ComponentMeta.init(u64, .{}));
@@ -361,7 +357,7 @@ const ArchetypeChunkTestContext = struct {
     }
 
     pub fn makeSingleColumnMeta(
-        self: *Self,
+        self: *@This(),
         comptime T: type,
         comp_meta: ComponentMeta,
     ) (RegisterError || ArchetypeMeta.InitError)!ArchetypeMeta {

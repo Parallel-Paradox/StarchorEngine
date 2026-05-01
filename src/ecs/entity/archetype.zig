@@ -10,8 +10,6 @@ const ComponentMeta = ecs.component.ComponentMeta;
 const EntityId = ecs.entity.EntityId;
 
 pub const Archetype = struct {
-    const Self = @This();
-
     pub const Meta = ecs.entity.ArchetypeMeta;
     pub const Chunk = ecs.entity.ArchetypeChunk;
 
@@ -32,7 +30,7 @@ pub const Archetype = struct {
         type_registry: *TypeRegistry,
         comp_registry: *ComponentRegistry,
         unsorted_columns: []const Meta.Column,
-    ) InitError!Self {
+    ) InitError!@This() {
         const meta = try allocator.create(Meta);
         errdefer allocator.destroy(meta);
         meta.* = try Meta.init(allocator, type_registry, comp_registry, unsorted_columns);
@@ -42,7 +40,7 @@ pub const Archetype = struct {
         layout.* = try Chunk.Layout.init(allocator, meta);
         errdefer layout.deinit();
 
-        return Self{
+        return @This(){
             .allocator = allocator,
             .meta = meta,
             .layout = layout,
@@ -51,7 +49,7 @@ pub const Archetype = struct {
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         for (self.chunks.items) |*chunk| {
             chunk.deinit();
         }
@@ -65,7 +63,7 @@ pub const Archetype = struct {
         self.allocator.destroy(self.meta);
     }
 
-    fn ensureNotFull(self: *Self, gpa: Allocator, chunk_allocator: Allocator) Allocator.Error!void {
+    fn ensureNotFull(self: *@This(), gpa: Allocator, chunk_allocator: Allocator) Allocator.Error!void {
         if (self.chunks.items.len == 0) {
             self.layout.resetCapacity(1);
             var chunk = try Chunk.init(chunk_allocator, self.layout);
@@ -136,7 +134,7 @@ pub const Archetype = struct {
 
     /// Use gpa to allocate temporary buffers, and chunk_allocator to allocate new `ArchetypeChunk` if needed.
     pub fn push(
-        self: *Self,
+        self: *@This(),
         gpa: Allocator,
         chunk_allocator: Allocator,
         eid: []EntityId,
@@ -180,7 +178,7 @@ pub const Archetype = struct {
 
     /// Buffer are filled with the tail of chunk. Return the count of entities that are successfully popped.
     /// Use gpa to allocate temporary buffers.
-    pub fn pop(self: *Self, gpa: Allocator, eid: []EntityId, columns: []?Chunk.ColumnBuffer) Allocator.Error!usize {
+    pub fn pop(self: *@This(), gpa: Allocator, eid: []EntityId, columns: []?Chunk.ColumnBuffer) Allocator.Error!usize {
         const pop_count = @min(eid.len, self.len);
         if (pop_count == 0) {
             return 0;
@@ -224,26 +222,24 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
 const ArchetypeTestContext = struct {
-    const Self = @This();
-
     type_registry: TypeRegistry,
     comp_registry: ComponentRegistry,
 
-    pub fn init(allocator: Allocator) Self {
-        return .{
+    pub fn init(allocator: Allocator) @This() {
+        return @This(){
             .type_registry = TypeRegistry.init(allocator),
             .comp_registry = ComponentRegistry.init(allocator),
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         self.type_registry.deinit();
         self.comp_registry.deinit();
     }
 
     const RegisterError = Allocator.Error || ComponentRegistry.Error;
 
-    pub fn registerBasicColumns(self: *Self) RegisterError![2]Archetype.Meta.Column {
+    pub fn registerBasicColumns(self: *@This()) RegisterError![2]Archetype.Meta.Column {
         const tid_u64 = try self.type_registry.register(u64);
         const tid_u32 = try self.type_registry.register(u32);
         const cid_u64 = try self.comp_registry.register(u64, ComponentMeta.init(u64, .{}));
@@ -255,13 +251,13 @@ const ArchetypeTestContext = struct {
         };
     }
 
-    pub fn makeBasicArchetype(self: *Self) (RegisterError || Archetype.Meta.InitError)!Archetype {
+    pub fn makeBasicArchetype(self: *@This()) (RegisterError || Archetype.Meta.InitError)!Archetype {
         const cols = try self.registerBasicColumns();
         return try Archetype.init(std.testing.allocator, &self.type_registry, &self.comp_registry, &cols);
     }
 
     pub fn makeSingleColumnArchetype(
-        self: *Self,
+        self: *@This(),
         comptime T: type,
     ) (RegisterError || Archetype.Meta.InitError)!Archetype {
         const tid = try self.type_registry.register(T);

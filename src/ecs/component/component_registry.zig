@@ -13,12 +13,12 @@ pub const ComponentId = struct {
     val: Val = INVALID_ID,
     registry: *const ComponentRegistry,
 
-    pub fn equal(self: ComponentId, other: ComponentId) bool {
+    pub fn equal(self: @This(), other: @This()) bool {
         return self.val == other.val and self.registry == other.registry;
     }
 
     /// Make sure the registry is valid and the meta is registered before calling this function.
-    pub fn meta(self: ComponentId) ComponentMeta {
+    pub fn meta(self: @This()) ComponentMeta {
         return self.registry.getMeta(self);
     }
 };
@@ -48,7 +48,7 @@ pub const ComponentMeta = struct {
     type_addr: TypeAddress,
     vtable: VTable(anyopaque),
 
-    pub fn init(comptime T: type, comptime vtable: VTable(T)) ComponentMeta {
+    pub fn init(comptime T: type, comptime vtable: VTable(T)) @This() {
         const VTableImpl = struct {
             pub fn deinit(self: *anyopaque) void {
                 const typed_self: *T = @ptrCast(@alignCast(self));
@@ -62,7 +62,7 @@ pub const ComponentMeta = struct {
             }
         };
 
-        return ComponentMeta{
+        return @This(){
             .type_addr = TypeAddress.of(T),
             .vtable = .{
                 .deinit_fn = VTableImpl.deinit,
@@ -71,27 +71,25 @@ pub const ComponentMeta = struct {
         };
     }
 
-    pub fn equal(self: ComponentMeta, other: ComponentMeta) bool {
+    pub fn equal(self: @This(), other: @This()) bool {
         return self.vtable.deinit_fn == other.vtable.deinit_fn and self.vtable.move_fn == other.vtable.move_fn;
     }
 };
 
 pub const ComponentRegistry = struct {
-    const Self = @This();
-
     allocator: Allocator,
     address_to_id: std.AutoHashMapUnmanaged(TypeAddress, ComponentId.Val),
     meta_list: std.ArrayList(ComponentMeta),
 
-    pub fn init(allocator: Allocator) Self {
-        return .{
+    pub fn init(allocator: Allocator) @This() {
+        return @This(){
             .allocator = allocator,
             .address_to_id = std.AutoHashMapUnmanaged(TypeAddress, ComponentId.Val).empty,
             .meta_list = std.ArrayList(ComponentMeta).empty,
         };
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *@This()) void {
         self.address_to_id.deinit(self.allocator);
         self.meta_list.deinit(self.allocator);
     }
@@ -101,7 +99,7 @@ pub const ComponentRegistry = struct {
         NonIdempotentWrite,
     };
 
-    pub fn register(self: *Self, comptime T: type, meta: ComponentMeta) Error!ComponentId {
+    pub fn register(self: *@This(), comptime T: type, meta: ComponentMeta) Error!ComponentId {
         const addr = TypeAddress.of(T);
         const get_id_val = self.address_to_id.get(addr);
         if (get_id_val) |id_val| {
@@ -122,7 +120,7 @@ pub const ComponentRegistry = struct {
         return rv;
     }
 
-    pub fn registerMeta(self: *Self, meta: ComponentMeta) Allocator.Error!ComponentId {
+    pub fn registerMeta(self: *@This(), meta: ComponentMeta) Allocator.Error!ComponentId {
         std.debug.assert(meta.type_addr.val != TypeAddress.INVALID_ADDRESS);
 
         const rv = ComponentId{ .val = self.meta_list.items.len, .registry = self };
@@ -133,12 +131,12 @@ pub const ComponentRegistry = struct {
         return rv;
     }
 
-    pub fn getIdByType(self: *const Self, comptime T: type) ?ComponentId {
+    pub fn getIdByType(self: *const @This(), comptime T: type) ?ComponentId {
         const addr = TypeAddress.of(T);
         return self.getIdByAddress(addr);
     }
 
-    pub fn getIdByAddress(self: *const Self, addr: TypeAddress) ?ComponentId {
+    pub fn getIdByAddress(self: *const @This(), addr: TypeAddress) ?ComponentId {
         if (self.address_to_id.get(addr)) |id_val| {
             return ComponentId{ .val = id_val, .registry = self };
         } else {
@@ -146,7 +144,7 @@ pub const ComponentRegistry = struct {
         }
     }
 
-    pub fn tryGetMeta(self: *const Self, id: ComponentId) ?ComponentMeta {
+    pub fn tryGetMeta(self: *const @This(), id: ComponentId) ?ComponentMeta {
         if (id.registry != self or id.val >= self.meta_list.items.len) {
             return null;
         }
@@ -154,7 +152,7 @@ pub const ComponentRegistry = struct {
     }
 
     /// Make sure the id is valid before calling this function.
-    pub fn getMeta(self: *const Self, id: ComponentId) ComponentMeta {
+    pub fn getMeta(self: *const @This(), id: ComponentId) ComponentMeta {
         std.debug.assert(id.registry == self);
         std.debug.assert(id.val < self.meta_list.items.len);
         return self.meta_list.items[id.val];
