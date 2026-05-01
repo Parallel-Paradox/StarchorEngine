@@ -11,6 +11,7 @@
         // zig
         "memcpy",
         "memset",
+        "wyhash",
         // project
         "starchor",
         "vtable"

@@ -28,6 +28,10 @@ pub const ecs = struct {
         const archetype = @import("entity/archetype.zig");
         pub const Archetype = archetype.Archetype;
 
+        const archetype_registry = @import("entity/archetype_registry.zig");
+        pub const ArchetypeId = archetype_registry.ArchetypeId;
+        pub const ArchetypeRegistry = archetype_registry.ArchetypeRegistry;
+
         const entity_registry = @import("entity/entity_registry.zig");
         pub const EntityId = entity_registry.EntityId;
     };
@@ -40,5 +44,6 @@ test {
     _ = ecs.entity.archetype_meta;
     _ = ecs.entity.archetype_chunk;
     _ = ecs.entity.archetype;
+    _ = ecs.entity.archetype_registry;
     _ = ecs.entity.entity_registry;
 }
