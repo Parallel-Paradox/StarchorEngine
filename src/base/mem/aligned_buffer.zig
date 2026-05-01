@@ -4,24 +4,22 @@ const Allocator = std.mem.Allocator;
 
 /// A safe wrapper for runtime-aligned buffers.
 pub const AlignedBuffer = struct {
-    const Self = @This();
-
     /// Keep original buffer for deallocation.
     original: []u8,
     /// Provide an aligned view of the original buffer.
     aligned: []u8,
 
-    pub fn init(allocator: Allocator, size: usize, alignment: usize) Allocator.Error!Self {
+    pub fn init(allocator: Allocator, size: usize, alignment: usize) Allocator.Error!@This() {
         const original = try allocator.alloc(u8, alignedToOriginal(size, alignment));
 
         const addr = @intFromPtr(original.ptr);
         const offset = std.mem.alignForward(usize, addr, alignment) - addr;
         const aligned = original[offset .. offset + size];
 
-        return Self{ .original = original, .aligned = aligned };
+        return @This(){ .original = original, .aligned = aligned };
     }
 
-    pub fn deinit(self: *Self, allocator: Allocator) void {
+    pub fn deinit(self: *@This(), allocator: Allocator) void {
         allocator.free(self.original);
     }
 
