@@ -9,6 +9,7 @@ const TypeRegistry = ecs.component.TypeRegistry;
 const ComponentId = ecs.component.ComponentId;
 const ComponentMeta = ecs.component.ComponentMeta;
 const ComponentRegistry = ecs.component.ComponentRegistry;
+const ArchetypeId = ecs.entity.ArchetypeId;
 
 pub const ArchetypeSignature = ecs.entity.EntitySignature;
 
@@ -22,6 +23,8 @@ pub const ArchetypeMeta = struct {
     pub const ColumnLookup = std.AutoHashMapUnmanaged(ComponentId.Val, usize);
 
     allocator: Allocator,
+    id: ArchetypeId,
+    /// DO NOT edit the signature after initialization, this is intended to be stable and shared.
     signature: ArchetypeSignature,
     /// alignment descending > size descending > component_id ascending.
     /// Stable column order used when generating archetype chunk layouts.
@@ -39,6 +42,7 @@ pub const ArchetypeMeta = struct {
 
     pub fn init(
         allocator: Allocator,
+        id: ArchetypeId,
         type_registry: *const TypeRegistry,
         comp_registry: *const ComponentRegistry,
         unsorted_columns: []const Column,
@@ -111,6 +115,7 @@ pub const ArchetypeMeta = struct {
 
         return @This(){
             .allocator = allocator,
+            .id = id,
             .signature = signature,
             .columns = columns,
             .column_lookup = column_lookup,
@@ -171,6 +176,7 @@ const ArchetypeMetaTestContext = struct {
 
         return try ArchetypeMeta.init(
             self.type_registry.allocator,
+            .{},
             &self.type_registry,
             &self.comp_registry,
             &columns,
@@ -219,12 +225,7 @@ test "ArchetypeMeta init returns EmptyArchetype for empty columns" {
 
     try expectError(
         ArchetypeMeta.InitError.EmptyArchetype,
-        ArchetypeMeta.init(
-            std.testing.allocator,
-            &ctx.type_registry,
-            &ctx.comp_registry,
-            &.{},
-        ),
+        ArchetypeMeta.init(std.testing.allocator, .{}, &ctx.type_registry, &ctx.comp_registry, &.{}),
     );
 }
 
@@ -240,11 +241,6 @@ test "ArchetypeMeta init returns MismatchedTypeAddress when ids are from differe
 
     try expectError(
         ArchetypeMeta.InitError.MismatchedTypeAddress,
-        ArchetypeMeta.init(
-            std.testing.allocator,
-            &ctx.type_registry,
-            &ctx.comp_registry,
-            &columns,
-        ),
+        ArchetypeMeta.init(std.testing.allocator, .{}, &ctx.type_registry, &ctx.comp_registry, &columns),
     );
 }

@@ -8,6 +8,7 @@ const TypeRegistry = ecs.component.TypeRegistry;
 const ComponentRegistry = ecs.component.ComponentRegistry;
 const ComponentMeta = ecs.component.ComponentMeta;
 const EntityId = ecs.entity.EntityId;
+const ArchetypeId = ecs.entity.ArchetypeId;
 
 pub const Archetype = struct {
     pub const Meta = ecs.entity.ArchetypeMeta;
@@ -27,13 +28,14 @@ pub const Archetype = struct {
 
     pub fn init(
         allocator: Allocator,
+        id: ArchetypeId,
         type_registry: *TypeRegistry,
         comp_registry: *ComponentRegistry,
         unsorted_columns: []const Meta.Column,
     ) InitError!@This() {
         const meta = try allocator.create(Meta);
         errdefer allocator.destroy(meta);
-        meta.* = try Meta.init(allocator, type_registry, comp_registry, unsorted_columns);
+        meta.* = try Meta.init(allocator, id, type_registry, comp_registry, unsorted_columns);
 
         const layout = try allocator.create(Chunk.Layout);
         errdefer allocator.destroy(layout);
@@ -253,7 +255,7 @@ const ArchetypeTestContext = struct {
 
     pub fn makeBasicArchetype(self: *@This()) (RegisterError || Archetype.Meta.InitError)!Archetype {
         const cols = try self.registerBasicColumns();
-        return try Archetype.init(std.testing.allocator, &self.type_registry, &self.comp_registry, &cols);
+        return try Archetype.init(std.testing.allocator, .{}, &self.type_registry, &self.comp_registry, &cols);
     }
 
     pub fn makeSingleColumnArchetype(
@@ -263,7 +265,7 @@ const ArchetypeTestContext = struct {
         const tid = try self.type_registry.register(T);
         const cid = try self.comp_registry.register(T, ComponentMeta.init(T, .{}));
         const cols = [_]Archetype.Meta.Column{.{ .type_id_val = tid.val, .comp_id_val = cid.val }};
-        return try Archetype.init(std.testing.allocator, &self.type_registry, &self.comp_registry, &cols);
+        return try Archetype.init(std.testing.allocator, .{}, &self.type_registry, &self.comp_registry, &cols);
     }
 };
 

@@ -333,7 +333,7 @@ const ArchetypeChunkTestContext = struct {
         self: *@This(),
         columns: []const ArchetypeMeta.Column,
     ) (Allocator.Error || ArchetypeMeta.InitError)!ArchetypeMeta {
-        return ArchetypeMeta.init(self.type_registry.allocator, &self.type_registry, &self.comp_registry, columns);
+        return ArchetypeMeta.init(self.type_registry.allocator, .{}, &self.type_registry, &self.comp_registry, columns);
     }
 
     pub fn makeLayout(meta: *const ArchetypeMeta, capacity: usize) Allocator.Error!ArchetypeChunk.Layout {
