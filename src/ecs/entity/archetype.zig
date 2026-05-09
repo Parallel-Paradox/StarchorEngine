@@ -24,15 +24,13 @@ pub const Archetype = struct {
     chunks: std.ArrayList(Chunk) = .empty,
     len: usize = 0,
 
-    const InitError = Allocator.Error || Meta.InitError;
-
     pub fn init(
         allocator: Allocator,
         id: ArchetypeId,
         type_registry: *TypeRegistry,
         comp_registry: *ComponentRegistry,
         unsorted_columns: []const Meta.Column,
-    ) InitError!@This() {
+    ) Allocator.Error!@This() {
         const meta = try allocator.create(Meta);
         errdefer allocator.destroy(meta);
         meta.* = try Meta.init(allocator, id, type_registry, comp_registry, unsorted_columns);
@@ -251,7 +249,7 @@ const ArchetypeTestContext = struct {
         };
     }
 
-    pub fn makeBasicArchetype(self: *@This()) (RegisterError || Archetype.Meta.InitError)!Archetype {
+    pub fn makeBasicArchetype(self: *@This()) RegisterError!Archetype {
         const cols = try self.registerBasicColumns();
         return try Archetype.init(std.testing.allocator, .{}, &self.type_registry, &self.comp_registry, &cols);
     }
@@ -259,7 +257,7 @@ const ArchetypeTestContext = struct {
     pub fn makeSingleColumnArchetype(
         self: *@This(),
         comptime T: type,
-    ) (RegisterError || Archetype.Meta.InitError)!Archetype {
+    ) RegisterError!Archetype {
         const tid = try self.type_registry.register(T);
         const cid = try self.comp_registry.register(T, ComponentMeta.init(T, .{}));
         const cols = [_]Archetype.Meta.Column{.{ .type_id_val = tid.val, .comp_id_val = cid.val }};

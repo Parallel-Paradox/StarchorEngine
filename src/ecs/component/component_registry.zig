@@ -45,7 +45,7 @@ pub const ComponentMeta = struct {
         };
     }
 
-    type_addr: TypeAddress = .{},
+    type_addr: TypeAddress = .invalid,
     vtable: VTable(anyopaque) = .{},
 
     pub fn init(comptime T: type, comptime vtable: VTable(T)) @This() {

@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 
 pub const TypeAddress = struct {
     pub const INVALID_ADDRESS: usize = 0;
+    pub const invalid = TypeAddress{};
 
     val: usize = INVALID_ADDRESS,
 
@@ -34,7 +35,7 @@ pub const TypeId = struct {
 };
 
 pub const TypeMeta = struct {
-    type_addr: TypeAddress = TypeAddress.INVALID_ADDRESS,
+    type_addr: TypeAddress = .invalid,
     size: usize = 0,
     alignment: usize = 0,
     name: []const u8 = "",

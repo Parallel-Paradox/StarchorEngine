@@ -33,23 +33,14 @@ pub const ArchetypeMeta = struct {
     type_registry: *const TypeRegistry,
     comp_registry: *const ComponentRegistry,
 
-    pub const InitError = Allocator.Error || error{
-        /// The archetype has no components since type_id_vals and comp_id_vals are empty.
-        EmptyArchetype,
-        /// The comp_id and type_id of a column come from different types.
-        MismatchedTypeAddress,
-    };
-
     pub fn init(
         allocator: Allocator,
         id: ArchetypeId,
         type_registry: *const TypeRegistry,
         comp_registry: *const ComponentRegistry,
         unsorted_columns: []const Column,
-    ) InitError!@This() {
-        if (unsorted_columns.len == 0) {
-            return InitError.EmptyArchetype;
-        }
+    ) Allocator.Error!@This() {
+        std.debug.assert(unsorted_columns.len != 0);
 
         var columns = try ColumnList.initCapacity(allocator, unsorted_columns.len);
         errdefer columns.deinit(allocator);
@@ -59,9 +50,7 @@ pub const ArchetypeMeta = struct {
             const comp_id = ComponentId{ .val = col.comp_id_val, .registry = comp_registry };
             const type_meta = type_id.meta();
             const comp_meta = comp_id.meta();
-            if (type_meta.type_addr.val != comp_meta.type_addr.val) {
-                return InitError.MismatchedTypeAddress;
-            }
+            std.debug.assert(type_meta.type_addr.val == comp_meta.type_addr.val);
             try columns.append(allocator, col);
         }
         const ColumnsCmp = struct {
@@ -164,7 +153,7 @@ const ArchetypeMetaTestContext = struct {
         _ = try self.comp_registry.register(i32, ComponentMeta.init(i32, .{}));
     }
 
-    pub fn generateMockMeta(self: *@This()) (MockError || ArchetypeMeta.InitError)!ArchetypeMeta {
+    pub fn generateMockMeta(self: *@This()) MockError!ArchetypeMeta {
         try self.mockRegistry();
 
         const columns = [_]ArchetypeMeta.Column{
@@ -217,30 +206,4 @@ test "ArchetypeMeta init sorts columns and builds signature and lookup" {
     try expectEqual(@as(usize, 2), meta.column_lookup.get(0).?);
     try expectEqual(@as(usize, 3), meta.column_lookup.get(3).?);
     try expect(meta.column_lookup.get(4) == null);
-}
-
-test "ArchetypeMeta init returns EmptyArchetype for empty columns" {
-    var ctx = ArchetypeMetaTestContext.init(std.testing.allocator);
-    defer ctx.deinit();
-
-    try expectError(
-        ArchetypeMeta.InitError.EmptyArchetype,
-        ArchetypeMeta.init(std.testing.allocator, .{}, &ctx.type_registry, &ctx.comp_registry, &.{}),
-    );
-}
-
-test "ArchetypeMeta init returns MismatchedTypeAddress when ids are from different types" {
-    var ctx = ArchetypeMetaTestContext.init(std.testing.allocator);
-    defer ctx.deinit();
-
-    try ctx.mockRegistry();
-
-    const columns = [_]ArchetypeMeta.Column{
-        .{ .type_id_val = 2, .comp_id_val = 2 },
-    };
-
-    try expectError(
-        ArchetypeMeta.InitError.MismatchedTypeAddress,
-        ArchetypeMeta.init(std.testing.allocator, .{}, &ctx.type_registry, &ctx.comp_registry, &columns),
-    );
 }

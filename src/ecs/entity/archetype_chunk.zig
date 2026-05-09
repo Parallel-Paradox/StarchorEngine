@@ -329,7 +329,7 @@ const ArchetypeChunkTestContext = struct {
     pub fn makeMeta(
         self: *@This(),
         columns: []const ArchetypeMeta.Column,
-    ) (Allocator.Error || ArchetypeMeta.InitError)!ArchetypeMeta {
+    ) Allocator.Error!ArchetypeMeta {
         return ArchetypeMeta.init(self.type_registry.allocator, .{}, &self.type_registry, &self.comp_registry, columns);
     }
 
@@ -357,7 +357,7 @@ const ArchetypeChunkTestContext = struct {
         self: *@This(),
         comptime T: type,
         comp_meta: ComponentMeta,
-    ) (RegisterError || ArchetypeMeta.InitError)!ArchetypeMeta {
+    ) RegisterError!ArchetypeMeta {
         const tid = try self.type_registry.register(T);
         const cid = try self.comp_registry.register(T, comp_meta);
         const columns = [_]ArchetypeMeta.Column{
