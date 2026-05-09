@@ -32,11 +32,11 @@ pub const ArchetypeChunk = struct {
     pub const Layout = struct {
         allocator: Allocator,
         meta: *const ArchetypeMeta,
-        capacity: usize,
-        buffer_size: usize,
-        buffer_alignment: usize,
+        capacity: usize = 0,
+        buffer_size: usize = 0,
+        buffer_alignment: usize = 0,
         column_offsets: std.ArrayList(usize),
-        entity_id_offset: usize,
+        entity_id_offset: usize = 0,
 
         pub fn init(allocator: Allocator, meta: *const ArchetypeMeta) Allocator.Error!@This() {
             var column_offsets = try std.ArrayList(usize).initCapacity(allocator, meta.columns.items.len);
@@ -55,11 +55,8 @@ pub const ArchetypeChunk = struct {
             return @This(){
                 .allocator = allocator,
                 .meta = meta,
-                .capacity = 0,
-                .buffer_size = 0,
                 .buffer_alignment = buffer_alignment,
                 .column_offsets = column_offsets,
-                .entity_id_offset = 0,
             };
         }
 
@@ -129,7 +126,7 @@ pub const ArchetypeChunk = struct {
     layout: *const Layout,
     buffer: AlignedBuffer,
     /// The count of entities currently stored in the chunk. Always less than or equal to `layout.capacity`.
-    len: usize,
+    len: usize = 0,
 
     pub fn init(allocator: Allocator, layout: *const Layout) Allocator.Error!@This() {
         std.debug.assert(layout.column_offsets.items.len > 0); // Empty layout is not allowed.
@@ -137,13 +134,13 @@ pub const ArchetypeChunk = struct {
             .allocator = allocator,
             .layout = layout,
             .buffer = try AlignedBuffer.init(allocator, layout.buffer_size, layout.buffer_alignment),
-            .len = 0,
         };
     }
 
     pub fn deinit(self: *@This()) void {
         self.removeTail(self.len);
         self.buffer.deinit(self.allocator);
+        self.len = 0;
     }
 
     /// Get the slice of EntityId that contains unoccupied slots. Used for writing new entities.
@@ -163,8 +160,8 @@ pub const ArchetypeChunk = struct {
 
     pub const ColumnBuffer = struct {
         bytes: []u8,
-        stride: usize,
-        capacity: usize,
+        stride: usize = 0,
+        capacity: usize = 0,
 
         pub fn init(comptime T: type, vals: []T) @This() {
             return @This(){

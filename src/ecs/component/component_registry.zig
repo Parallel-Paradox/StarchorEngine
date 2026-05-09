@@ -45,8 +45,8 @@ pub const ComponentMeta = struct {
         };
     }
 
-    type_addr: TypeAddress,
-    vtable: VTable(anyopaque),
+    type_addr: TypeAddress = .{},
+    vtable: VTable(anyopaque) = .{},
 
     pub fn init(comptime T: type, comptime vtable: VTable(T)) @This() {
         const VTableImpl = struct {
@@ -78,15 +78,11 @@ pub const ComponentMeta = struct {
 
 pub const ComponentRegistry = struct {
     allocator: Allocator,
-    address_to_id: std.AutoHashMapUnmanaged(TypeAddress, ComponentId.Val),
-    meta_list: std.ArrayList(ComponentMeta),
+    address_to_id: std.AutoHashMapUnmanaged(TypeAddress, ComponentId.Val) = .empty,
+    meta_list: std.ArrayList(ComponentMeta) = .empty,
 
     pub fn init(allocator: Allocator) @This() {
-        return @This(){
-            .allocator = allocator,
-            .address_to_id = std.AutoHashMapUnmanaged(TypeAddress, ComponentId.Val).empty,
-            .meta_list = std.ArrayList(ComponentMeta).empty,
-        };
+        return @This(){ .allocator = allocator };
     }
 
     pub fn deinit(self: *@This()) void {

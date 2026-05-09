@@ -15,21 +15,21 @@ pub const ArchetypeSignature = ecs.entity.EntitySignature;
 
 pub const ArchetypeMeta = struct {
     pub const Column = struct {
-        type_id_val: TypeId.Val,
-        comp_id_val: ComponentId.Val,
+        type_id_val: TypeId.Val = TypeId.INVALID_ID,
+        comp_id_val: ComponentId.Val = ComponentId.INVALID_ID,
     };
 
     pub const ColumnList = std.ArrayList(Column);
     pub const ColumnLookup = std.AutoHashMapUnmanaged(ComponentId.Val, usize);
 
     allocator: Allocator,
-    id: ArchetypeId,
+    id: ArchetypeId = .{},
     /// DO NOT edit the signature after initialization, this is intended to be stable and shared.
     signature: ArchetypeSignature,
     /// alignment descending > size descending > component_id ascending.
     /// Stable column order used when generating archetype chunk layouts.
-    columns: ColumnList,
-    column_lookup: ColumnLookup,
+    columns: ColumnList = .empty,
+    column_lookup: ColumnLookup = .empty,
     type_registry: *const TypeRegistry,
     comp_registry: *const ComponentRegistry,
 

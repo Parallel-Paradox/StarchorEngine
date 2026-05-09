@@ -34,10 +34,10 @@ pub const TypeId = struct {
 };
 
 pub const TypeMeta = struct {
-    type_addr: TypeAddress,
-    size: usize,
-    alignment: usize,
-    name: []const u8,
+    type_addr: TypeAddress = TypeAddress.INVALID_ADDRESS,
+    size: usize = 0,
+    alignment: usize = 0,
+    name: []const u8 = "",
 
     pub fn init(comptime T: type) @This() {
         return @This(){
@@ -51,15 +51,11 @@ pub const TypeMeta = struct {
 
 pub const TypeRegistry = struct {
     allocator: Allocator,
-    address_to_id: std.AutoHashMapUnmanaged(TypeAddress, TypeId.Val),
-    meta_list: std.ArrayList(TypeMeta),
+    address_to_id: std.AutoHashMapUnmanaged(TypeAddress, TypeId.Val) = .empty,
+    meta_list: std.ArrayList(TypeMeta) = .empty,
 
     pub fn init(allocator: Allocator) @This() {
-        return @This(){
-            .allocator = allocator,
-            .address_to_id = std.AutoHashMapUnmanaged(TypeAddress, TypeId.Val).empty,
-            .meta_list = std.ArrayList(TypeMeta).empty,
-        };
+        return @This(){ .allocator = allocator };
     }
 
     pub fn deinit(self: *@This()) void {

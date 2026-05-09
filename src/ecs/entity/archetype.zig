@@ -21,8 +21,8 @@ pub const Archetype = struct {
     allocator: Allocator,
     meta: *Meta,
     layout: *Chunk.Layout,
-    chunks: std.ArrayList(Chunk),
-    len: usize,
+    chunks: std.ArrayList(Chunk) = .empty,
+    len: usize = 0,
 
     const InitError = Allocator.Error || Meta.InitError;
 
@@ -46,8 +46,6 @@ pub const Archetype = struct {
             .allocator = allocator,
             .meta = meta,
             .layout = layout,
-            .chunks = std.ArrayList(Chunk).empty,
-            .len = 0,
         };
     }
 

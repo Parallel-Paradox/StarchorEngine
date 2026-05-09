@@ -9,13 +9,12 @@ const ComponentRegistry = ecs.component.ComponentRegistry;
 
 pub const EntitySignature = struct {
     mask: std.DynamicBitSet,
-    hash: u64,
+    hash: u64 = 0,
 
     pub fn init(allocator: Allocator) @This() {
         return @This(){
             // Impossible to fail since we start with empty bitset.
             .mask = std.DynamicBitSet.initEmpty(allocator, 0) catch unreachable,
-            .hash = 0,
         };
     }
 
