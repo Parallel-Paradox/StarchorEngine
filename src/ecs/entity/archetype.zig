@@ -27,8 +27,8 @@ pub const Archetype = struct {
     pub fn init(
         allocator: Allocator,
         id: ArchetypeId,
-        type_registry: *TypeRegistry,
-        comp_registry: *ComponentRegistry,
+        type_registry: *const TypeRegistry,
+        comp_registry: *const ComponentRegistry,
         unsorted_columns: []const Meta.Column,
     ) Allocator.Error!@This() {
         const meta = try allocator.create(Meta);
